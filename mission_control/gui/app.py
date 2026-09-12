@@ -36,10 +36,13 @@ from gui.controller import build_mission_input
 from gui.screens.home import HomeScreen
 from gui.screens.task_detail import TaskDetailScreen
 from gui.screens.task_menu import TaskMenuScreen
+from gui.screens.thrusters import ThrusterScreen
 from gui.screens.upload_screen import UploadScreen
 
-Screen = Union[HomeScreen, TaskMenuScreen, TaskDetailScreen, UploadScreen]
-State = Literal["home", "menu", "detail", "upload"]
+Screen = Union[
+    HomeScreen, TaskMenuScreen, TaskDetailScreen, UploadScreen, ThrusterScreen
+]
+State = Literal["home", "menu", "detail", "upload", "thrusters"]
 
 
 class MissionApp(ctk.CTk):
@@ -173,6 +176,12 @@ class MissionApp(ctk.CTk):
         self._screen.pack(fill="both", expand=True)
         self._reset_mission_ready()
 
+    def _show_thrusters(self) -> None:
+        self._state = "thrusters"
+        self._clear_screen()
+        self._screen = ThrusterScreen(self._container)
+        self._screen.pack(fill="both", expand=True)
+
     def _show_upload(self, task_id: str) -> None:
         self._state = "upload"
         self._clear_screen()
@@ -221,8 +230,20 @@ class MissionApp(ctk.CTk):
             choice = s.selected_label()
             if choice == "Browse Tasks":
                 self._show_menu()
+            elif choice == "Thruster Control":
+                self._show_thrusters()
             elif choice == "Exit":
                 self.destroy()
+            return
+
+        if self._state == "thrusters" and isinstance(s, ThrusterScreen):
+            act = s.selected_action()
+            if act == "Run thrusters":
+                self._set_thrusters(s, True)
+            elif act == "Stop thrusters":
+                self._set_thrusters(s, False)
+            elif act == "Back":
+                self._show_home()
             return
 
         if self._state == "menu" and isinstance(s, TaskMenuScreen):
@@ -265,6 +286,8 @@ class MissionApp(ctk.CTk):
             return
         if self._state == "menu":
             self._show_home()
+        elif self._state == "thrusters":
+            self._show_home()
         elif self._state == "detail":
             self._show_menu()
         elif self._state == "upload":
@@ -282,6 +305,17 @@ class MissionApp(ctk.CTk):
             return
         screen.set_status("Upload successful.", ok=True)
         self._set_mission_uploaded()
+
+    def _set_thrusters(self, screen: ThrusterScreen, running: bool) -> None:
+        command = "enable_thrusters" if running else "disable_thrusters"
+        try:
+            api_mod.send_command({"command": command})
+        except Exception as exc:  # noqa: BLE001
+            screen.set_status(None, str(exc))
+            self._toast(f"{command} failed: {exc}")
+            return
+        screen.set_status(running)
+        self._set_mission_status("THRUSTERS RUNNING" if running else "READY")
 
     def _run_task_command(self, task_id: str) -> None:
         try:

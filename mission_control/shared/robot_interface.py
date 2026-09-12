@@ -54,6 +54,22 @@ class RobotInterface:
             "message": "reconstruction command sent",
         }
 
+    def set_thrusters(self, enabled: bool) -> dict[str, Any]:
+        """Arm or disarm gamepad → thruster control on the Jetson.
+
+        Publishes to the same ``commands`` topic the other actions use;
+        ``signal_publisher_node`` holds every channel at neutral until it sees
+        ``enable_thrusters``.
+        """
+        command = "enable_thrusters" if enabled else "disable_thrusters"
+        controller = self._get_controller()
+        controller.send_command(command)
+        return {
+            "ok": True,
+            "enabled": enabled,
+            "message": f"{command} sent",
+        }
+
     def get_status(self) -> dict[str, Any]:
         return {
             "ok": True,

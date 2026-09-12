@@ -49,7 +49,13 @@ app.include_router(uploads_router)
 class CommandBody(BaseModel):
     """JSON body for POST /command."""
 
-    command: str = Field(..., description="e.g. run_task, get_status, send_images")
+    command: str = Field(
+        ...,
+        description=(
+            "e.g. run_task, get_status, send_images, run_reconstruction, "
+            "enable_thrusters, disable_thrusters"
+        ),
+    )
     task_id: Optional[str] = None
     image_paths: Optional[List[str]] = Field(
         default=None,
@@ -94,5 +100,8 @@ def post_command(body: CommandBody) -> Dict[str, Any]:
             )
         paths = body.image_paths or []
         return _robot.run_reconstruction(body.task_id, paths)
+
+    if cmd in ("enable_thrusters", "disable_thrusters"):
+        return _robot.set_thrusters(cmd == "enable_thrusters")
 
     raise HTTPException(status_code=400, detail=f"Unknown command: {body.command}")

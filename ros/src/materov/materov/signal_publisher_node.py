@@ -2,9 +2,23 @@ import random
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
+from std_msgs.msg import String
 import serial
 import argparse
 import numpy as np
+
+
+# Master switch for direct gamepad → thruster control.
+#
+# False (default): the gamepad does NOT drive the thrusters on startup. The
+#   sticks only move the ROV after mission control sends "enable_thrusters"
+#   (Home → Thruster Control → Run thrusters in the app).
+# True: the old behaviour — the gamepad drives the thrusters as soon as the
+#   node starts, with no arming step.
+#
+# Flip this constant, or pass --direct_control on the command line, to go back
+# to the always-on behaviour without touching anything else.
+DIRECT_CONTROL_DEFAULT = False
 
 
 # DONE 1. documentation for the code
@@ -79,13 +93,23 @@ THRUSTER_GEOMETRY = [
 
 class SignalPublisherNode(Node):
 
-    def __init__(self, port, baudrate, hz, ramp_mode):
+    def __init__(self, port, baudrate, hz, ramp_mode, direct_control=DIRECT_CONTROL_DEFAULT):
         super().__init__('signal_publisher')
         # Subscribe to the /joy topic published by your other package
         self.subscription = self.create_subscription(
             Joy,
             'joy',
             self.joy_callback,
+            10)
+
+        # Arming state. While False, /joy is read but ignored and the thrusters
+        # are held at neutral, so navigating the mission control GUI with the
+        # gamepad cannot move the ROV.
+        self.thrusters_enabled = bool(direct_control)
+        self.command_subscription = self.create_subscription(
+            String,
+            'commands',
+            self.command_callback,
             10)
 
         self.current_values = [1500, 1500, 1500, 1500, 1500, 1500]
@@ -110,8 +134,42 @@ class SignalPublisherNode(Node):
         self.timer = self.create_timer(1.0 / hz, self.serial_timer_callback)
         self._serial_retry_timer = self.create_timer(5.0, self._retry_serial)
 
-        self.get_logger().info("Signal publisher node started. Move your controller to control thrusters.")
-       
+        if self.thrusters_enabled:
+            self.get_logger().warn(
+                "Signal publisher started with DIRECT CONTROL ENABLED — "
+                "the gamepad drives the thrusters immediately."
+            )
+        else:
+            self.get_logger().info(
+                "Signal publisher started with thrusters DISABLED. Send "
+                "'enable_thrusters' (mission control: Thruster Control → Run "
+                "thrusters) to arm."
+            )
+
+    def command_callback(self, msg):
+        """Arm / disarm from mission control's /commands topic."""
+        command = msg.data.strip().lower()
+
+        if command == "enable_thrusters":
+            if not self.thrusters_enabled:
+                self.thrusters_enabled = True
+                self.get_logger().warn("Thrusters ENABLED — gamepad now drives the ROV.")
+        elif command == "disable_thrusters":
+            # Neutralise even if already disabled, so this doubles as a stop.
+            self.thrusters_enabled = False
+            self._neutralize()
+            self.get_logger().info("Thrusters DISABLED — gamepad input ignored.")
+
+    def _neutralize(self):
+        """Snap every channel to neutral, bypassing the ramp.
+
+        The ramp exists to limit current spikes when throttling up; a stop must
+        take effect on the next serial frame, not three seconds later.
+        """
+        self.current_values = [1500, 1500, 1500, 1500, 1500, 1500]
+        self.target_values = [1500, 1500, 1500, 1500, 1500, 1500]
+        self.seventh_value = 1500
+
     def _try_open_serial(self):
         try:
             ser = serial.Serial(port=self._port, baudrate=self._baudrate, timeout=0.01)
@@ -227,6 +285,14 @@ class SignalPublisherNode(Node):
 
     def joy_callback(self, msg):
 
+        # Disarmed: ignore the gamepad entirely and hold neutral. This is what
+        # lets the same controller drive the mission control GUI without the
+        # sticks also moving the ROV.
+        if not self.thrusters_enabled:
+            self.target_values = [1500, 1500, 1500, 1500, 1500, 1500]
+            self.seventh_value = 1500
+            return
+
         # Get the buttons and axes vector as a simple list
         buttons_list = list(msg.buttons)
         axes_list = list(msg.axes)
@@ -307,6 +373,17 @@ def main(args=None):
         help="Ramp mode: sync (default) or async"
     )
 
+    parser.add_argument(
+        "--direct_control",
+        action="store_true",
+        default=DIRECT_CONTROL_DEFAULT,
+        help=(
+            "Start with gamepad → thruster control already enabled, skipping "
+            "the arming step. Default: %(default)s. Leave this off to require "
+            "'enable_thrusters' from mission control first."
+        ),
+    )
+
     parsed_args, remaining = parser.parse_known_args(args=args)
 
     rclpy.init(args=remaining)
@@ -314,7 +391,8 @@ def main(args=None):
         port=parsed_args.port,
         baudrate=parsed_args.baudrate,
         hz=parsed_args.hz,
-        ramp_mode=parsed_args.ramp_mode
+        ramp_mode=parsed_args.ramp_mode,
+        direct_control=parsed_args.direct_control
     )
 
     try:
