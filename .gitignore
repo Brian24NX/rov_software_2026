@@ -30,3 +30,36 @@ mission_control/backend/uploaded_images/
 .vscode/
 *.swp
 .codex
+
+
+# Local notes and reports; keep the user-facing READMEs and project policies
+*.md
+!README.md
+!LICENSE.md
+!CONTRIBUTING.md
+/Run ros
+
+# Local tests and test tooling
+test/
+tests/
+test_*.py
+*_test.py
+conftest.py
+pytest.ini
+requirements-test.txt
+/scripts/test_*.sh
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.ruff_cache/
+
+# Captured datasets, reconstruction output and downloaded installers
+/colmap_dir/
+*.whl
+
+# Local secrets
+.env
+.env.*
+!.env.example

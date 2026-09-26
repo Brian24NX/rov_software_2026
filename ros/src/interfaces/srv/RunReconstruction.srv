@@ -1,4 +1,8 @@
+# A label for the source capture directory; the laptop never opens this path.
 string image_folder
+# Transfer the actual JPEGs so a shared filesystem is not required.
+sensor_msgs/CompressedImage[<=30] images
 ---
 bool success
 string model_path
+string message

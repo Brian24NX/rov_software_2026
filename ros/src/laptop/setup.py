@@ -18,11 +18,6 @@ setup(
     maintainer_email='materov@todo.todo',
     description='TODO: Package description',
     license='TODO: License declaration',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
     entry_points={
         'console_scripts': [
             'vision_node = laptop.vision_node:main',

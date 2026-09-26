@@ -30,7 +30,7 @@ def main() -> None:
         "backend.main:app",
         host="127.0.0.1",
         port=8000,
-        reload=True,
+        reload=False,
         reload_dirs=[
             str(_ROOT / "backend"),
             str(_ROOT / "shared"),

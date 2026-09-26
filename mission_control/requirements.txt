@@ -5,3 +5,9 @@ python-multipart>=0.0.6
 
 # GUI uses stdlib urllib for HTTP (no httpx). See requirements-joystick.txt.
 customtkinter>=5.2.0
+
+# Validate uploads before storing them.
+Pillow>=9.0.0
+
+# ROS bridge imports these alongside the ROS overlay.
+PyYAML>=6

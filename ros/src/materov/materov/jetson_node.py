@@ -1,193 +1,147 @@
-# materov/materov/jetson_node.py
+"""Bounded, non-destructive capture jobs and laptop reconstruction requests."""
 from pathlib import Path
-import shutil
-import os
+import json
+import time
+import uuid
+
 import cv2
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from interfaces.srv import RunReconstruction
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage, Imu
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import String
 
 
 class JetsonNode(Node):
     def __init__(self):
         super().__init__('jetson_node')
-        self.capture_dir = Path("/home/m8rov123/shared/images")
-        os.makedirs(self.capture_dir, exist_ok=True)
+        self.capture_root = Path(self.declare_parameter(
+            'capture_root', str(Path.home() / 'shared/captures')).value)
         self.capture_target_count = 6
         self.capture_interval_s = 5.0
-        self.capture_count = 0
+        self.latest_camera = None
+        self.latest_camera_at = None
         self.capture_in_progress = False
-        self.capture_timer = None
-        self.latest_camera_frame = None  # exploreHD frame (always present)
-
-        self.command_subscription = self.create_subscription(
-            String,
-            'commands',
-            self.command_callback,
-            10,
-        )
-        # Primary camera (exploreHD) — used for streaming and reconstruction capture
-        self.camera_subscription = self.create_subscription(
-            CompressedImage,
-            '/camera/image_compressed',
-            self.camera_image_callback,
-            10,
-        )
-        self.imu_subscription = self.create_subscription(
-            Imu,
-            '/imu/data_raw',
-            self.imu_callback,
-            10,
-        )
-
-        self.client = self.create_client(
-            RunReconstruction,
-            'run_reconstruction',
-        )
+        self.future = None
+        self.images = []
+        self.deadline = None
+        self.next_capture = None
+        self.client = self.create_client(RunReconstruction, 'run_reconstruction')
         self.status_pub = self.create_publisher(String, 'status', 10)
+        self.create_subscription(String, 'commands', self.command_callback, 10)
+        self.create_subscription(CompressedImage, '/camera/image_compressed',
+                                 self.camera_image_callback, qos_profile_sensor_data)
+        self.create_timer(0.25, self.capture_image_tick)
 
-        self.get_logger().info("Jetson node started and listening for commands...")
+    def status(self, value):
+        self.status_pub.publish(String(data=value))
+        self.get_logger().info(value)
 
-    def camera_image_callback(self, msg: CompressedImage):
+    def camera_image_callback(self, msg):
+        if len(msg.data) > 10 * 1024 * 1024:
+            return
         try:
-            np_arr = np.frombuffer(msg.data, np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            frame = cv2.imdecode(np.frombuffer(msg.data, np.uint8), cv2.IMREAD_COLOR)
             if frame is None:
-                raise ValueError("OpenCV returned an empty frame")
-            self.latest_camera_frame = frame
-        except Exception as e:
-            self.get_logger().error(f"Failed to decode camera image: {e}")
+                return
+        except (cv2.error, ValueError):
+            return
+        self.latest_camera, self.latest_camera_at = msg, time.monotonic()
 
-    def command_callback(self, msg: String):
-        command = msg.data
-        self.get_logger().info(f"Received command: {command}")
-
-        if command == "run_reconstruction":
+    def command_callback(self, msg):
+        command = msg.data.strip().lower()
+        if command.startswith('{'):
+            try:
+                command = str(json.loads(msg.data)['command']).strip().lower()
+            except (ValueError, KeyError, TypeError):
+                return
+        if command == 'run_reconstruction':
             self.start_reconstruction_capture()
-        elif command == "forward":
-            self.move_forward()
-        elif command == "backward":
-            self.move_backward()
-        elif command == "stop":
-            self.stop_motors()
-        else:
-            self.get_logger().warn(f"Unknown command: {command}")
-
-    def move_forward(self):
-        self.get_logger().info("Moving forward (placeholder)")
-
-    def move_backward(self):
-        self.get_logger().info("Moving backward (placeholder)")
-
-    def stop_motors(self):
-        self.get_logger().info("Stopping motors (placeholder)")
+        elif command in ('forward', 'backward'):
+            self.status('unsupported_command:' + command)
+        # Motor commands belong to signal_publisher, which acknowledges them.
 
     def start_reconstruction_capture(self):
-        if self.capture_in_progress:
-            self.get_logger().warn("Capture already in progress")
-            self.status_pub.publish(String(data="reconstruction_busy"))
+        if self.capture_in_progress or self.future is not None:
+            self.status('reconstruction_busy')
             return
-
+        if not self.client.service_is_ready():
+            self.status('reconstruction_failed:service_unavailable')
+            return
+        try:
+            self.capture_dir = self.capture_root / uuid.uuid4().hex
+            self.capture_dir.mkdir(parents=True, exist_ok=False)
+        except OSError as exc:
+            self.status(f'reconstruction_failed:capture_directory:{exc}')
+            return
+        self.images = []
         self.capture_in_progress = True
-        self.capture_count = 0
-
-        if self.capture_timer is not None:
-            self.capture_timer.cancel()
-            self.destroy_timer(self.capture_timer)
-            self.capture_timer = None
-
-        if self.capture_dir.exists():
-            try:
-                shutil.rmtree(self.capture_dir)
-            except OSError as e:
-                self.get_logger().warn(f"Could not clear capture dir: {e}")
-        self.capture_dir.mkdir(parents=True, exist_ok=True)
-
-        self.status_pub.publish(String(data="reconstruction_started"))
-        self.get_logger().info(
-            f"Capturing {self.capture_target_count} images from exploreHD "
-            f"with {self.capture_interval_s:.1f}s spacing"
-        )
-
+        self.next_capture = time.monotonic()
+        self.deadline = self.next_capture + self.capture_target_count * self.capture_interval_s + 15
+        self.status('reconstruction_started')
         self.capture_image_tick()
-        if self.capture_in_progress:
-            self.capture_timer = self.create_timer(
-                self.capture_interval_s,
-                self.capture_image_tick,
-            )
 
     def capture_image_tick(self):
-        if not self.capture_in_progress:
+        now = time.monotonic()
+        if self.deadline is not None and now >= self.deadline:
+            self.capture_in_progress = False
+            future, self.future = self.future, None
+            if future is not None:
+                future.cancel()
+            self.deadline = None
+            self.status('reconstruction_failed:timeout')
             return
-
-        if self.latest_camera_frame is None:
-            self.get_logger().warn("No camera frame available yet; waiting for the next tick")
+        if not self.capture_in_progress or now < self.next_capture:
             return
-
-        image_path = self.capture_dir / f"capture_{self.capture_count:02d}.jpg"
-        if not cv2.imwrite(str(image_path), self.latest_camera_frame):
-            self.get_logger().error(f"Failed to save image to {image_path}")
-            self.finish_capture("reconstruction_failed")
+        if self.latest_camera_at is None or now - self.latest_camera_at > 1.0:
             return
-
-        self.capture_count += 1
-        self.get_logger().info(
-            f"Saved image {self.capture_count}/{self.capture_target_count}: {image_path}"
-        )
-
-        if self.capture_count >= self.capture_target_count:
-            self.finish_capture("capture_complete")
+        try:
+            # Preserve the original JPEG; do not recompress or delete prior jobs.
+            image = self.latest_camera
+            (self.capture_dir / f'capture_{len(self.images):02d}.jpg').write_bytes(bytes(image.data))
+            self.images.append(image)
+        except OSError as exc:
+            self.capture_in_progress = False
+            self.deadline = None
+            self.status(f'reconstruction_failed:save_image:{exc}')
+            return
+        self.next_capture = now + self.capture_interval_s
+        if len(self.images) == self.capture_target_count:
+            self.capture_in_progress = False
+            self.status('capture_complete')
             self.send_reconstruction_request()
 
-    def finish_capture(self, status: str):
-        if self.capture_timer is not None:
-            self.capture_timer.cancel()
-            self.destroy_timer(self.capture_timer)
-            self.capture_timer = None
-
-        self.capture_in_progress = False
-        self.status_pub.publish(String(data=status))
-
-    def imu_callback(self, msg: Imu):
-        ax = msg.linear_acceleration.x
-        ay = msg.linear_acceleration.y
-        az = msg.linear_acceleration.z
-        gx = msg.angular_velocity.x
-        gy = msg.angular_velocity.y
-        gz = msg.angular_velocity.z
-        self.get_logger().debug(
-            f"IMU Accel: ({ax:.2f}, {ay:.2f}, {az:.2f}) | "
-            f"Gyro: ({gx:.2f}, {gy:.2f}, {gz:.2f})"
-        )
-
     def send_reconstruction_request(self):
-        req = RunReconstruction.Request()
-        req.image_folder = str(self.capture_dir)
-
-        if not self.client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().error("Reconstruction service not available")
-            self.status_pub.publish(String(data="reconstruction_failed"))
+        if not self.client.service_is_ready():
+            self.deadline = None
+            self.status('reconstruction_failed:service_unavailable')
             return
-
-        future = self.client.call_async(req)
-        future.add_done_callback(self._on_reconstruction_response)
+        request = RunReconstruction.Request()
+        request.image_folder = str(self.capture_dir)
+        request.images = self.images
+        try:
+            self.future = self.client.call_async(request)
+            self.deadline = time.monotonic() + 660
+            self.future.add_done_callback(self._on_reconstruction_response)
+        except Exception as exc:
+            self.future = None
+            self.deadline = None
+            self.status(f'reconstruction_failed:request:{exc}')
 
     def _on_reconstruction_response(self, future):
+        if future is not self.future:
+            return  # A canceled/timed-out job must not overwrite a newer job.
+        self.future = None
+        self.deadline = None
         try:
             response = future.result()
-        except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f"Reconstruction call failed: {exc}")
-            self.status_pub.publish(String(data="reconstruction_failed"))
-            return
-
-        self.get_logger().info(f"Success: {response.success}")
-        self.get_logger().info(f"Path: {response.model_path}")
-
-        status = "reconstruction_done" if response.success else "reconstruction_failed"
-        self.status_pub.publish(String(data=status))
+            self.status('reconstruction_done:' + response.model_path if response.success
+                        else 'reconstruction_failed:' + response.message)
+        except Exception as exc:
+            self.status(f'reconstruction_failed:{exc}')
 
 
 def main(args=None):
@@ -195,11 +149,12 @@ def main(args=None):
     node = JetsonNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

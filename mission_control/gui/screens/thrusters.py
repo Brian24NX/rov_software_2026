@@ -5,15 +5,7 @@ import customtkinter as ctk
 
 
 class ThrusterScreen(ctk.CTkFrame):
-    """
-    Arms or disarms gamepad → thruster control on the Jetson.
-
-    The status shown is the last command this app sent, not a reading from the
-    robot — there is no feedback topic yet, so a command that never reached the
-    Jetson would still show as sent. Treat it as intent, not confirmation.
-    """
-
-    ACTIONS = ("Run thrusters", "Stop thrusters", "Back")
+    ACTIONS = ("Stop thrusters", "Arm thrusters", "Back")
 
     def __init__(self, master: ctk.CTk | ctk.CTkFrame, **kwargs) -> None:
         super().__init__(master, **kwargs)
@@ -30,7 +22,8 @@ class ThrusterScreen(ctk.CTkFrame):
             self,
             text=(
                 "The thrusters ignore the gamepad until you run them here.\n"
-                "While stopped, the sticks only drive this menu."
+                "Release all driving controls before arming.\n"
+                "While armed, use keyboard Esc or View/Back to stop."
             ),
             font=ctk.CTkFont(size=13),
             text_color="gray",
@@ -39,7 +32,7 @@ class ThrusterScreen(ctk.CTkFrame):
 
         self._status = ctk.CTkLabel(
             self,
-            text="Last command sent: none this session",
+            text="Vehicle state: waiting for acknowledgment",
             font=ctk.CTkFont(size=14, weight="bold"),
         )
         self._status.pack(anchor="w", padx=16, pady=(0, 16))
@@ -80,13 +73,13 @@ class ThrusterScreen(ctk.CTkFrame):
     def set_status(self, running: bool | None, detail: str = "") -> None:
         if running is None:
             self._status.configure(
-                text=f"Last command failed: {detail}",
+                text=f"Vehicle state unknown: {detail}",
                 text_color=("#c0392b", "#e74c3c"),
             )
             return
-        state = "RUNNING" if running else "STOPPED"
+        state = "ARMED" if running else "DISARMED"
         colour = ("#b9770e", "#f5b041") if running else ("#1e8449", "#2ecc71")
-        self._status.configure(text=f"Last command sent: {state}", text_color=colour)
+        self._status.configure(text=f"Vehicle: {state} — {detail}", text_color=colour)
 
     def _apply_highlight(self) -> None:
         for i, lb in enumerate(self._labels):

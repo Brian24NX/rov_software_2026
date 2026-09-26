@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # Usage: bash scripts/launch_laptop.sh
 # One-command launch of the laptop ROS stack with the correct environment.
 set -e
@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 export PATH="/usr/bin:$PATH"
+export PYTHONNOUSERSITE=1
+source /opt/ros/humble/setup.bash
 
 if [ ! -f "$REPO_ROOT/ros/install/setup.bash" ]; then
   echo "Workspace not built. Run: bash scripts/setup_laptop.sh" >&2
@@ -31,4 +33,9 @@ else
   echo "[launch] enp8s0 not up — running localhost-only (no Nano)"
 fi
 
-exec ros2 launch laptop laptop.launch.py
+echo '[launch] CHECKING LIVE NANO ACTUATION STATUS...'
+if ! timeout 12s /usr/bin/python3 "$REPO_ROOT/scripts/check_actuation.py"; then
+  echo 'WARNING: ACTUATION STATUS UNKNOWN — LIVE NANO CHECK FAILED.' >&2
+fi
+
+exec ros2 launch laptop laptop.launch.py "$@"

@@ -32,7 +32,7 @@ class PygameJoystickInput:
         import pygame  # noqa: PLC0415
 
         self._pygame = pygame
-        pygame.init()
+        pygame.display.init()
         pygame.joystick.init()
         self._joystick: Optional[pygame.joystick.Joystick] = None
         self._stick_deadzone = 0.45
@@ -41,14 +41,30 @@ class PygameJoystickInput:
         self._prev_axis_sign: int = 0
         self._prev_buttons: tuple[bool, bool] = (False, False)
 
-        if pygame.joystick.get_count() > 0:
+        self._connect()
+
+    def _connect(self):
+        pygame = self._pygame
+        if self._joystick is None and pygame.joystick.get_count() > 0:
             self._joystick = pygame.joystick.Joystick(0)
             self._joystick.init()
+            # Held buttons on connection must not turn into a menu selection.
+            self._prev_buttons = tuple(bool(self._joystick.get_button(i))
+                                       for i in (0, 1))
+            self._prev_hat = (0, 0)
+            self._prev_axis_sign = 0
 
     def poll(self) -> List[str]:
         pygame = self._pygame
         events: List[str] = []
-        pygame.event.pump()
+        for event in pygame.event.get():
+            if event.type == pygame.JOYDEVICEREMOVED and self._joystick is not None:
+                if event.instance_id == self._joystick.get_instance_id():
+                    self._joystick.quit()
+                    self._joystick = None
+            elif event.type == pygame.JOYDEVICEADDED:
+                self._connect()
+        self._connect()
 
         joy = self._joystick
         if joy:
@@ -87,4 +103,5 @@ class PygameJoystickInput:
         return events
 
     def close(self) -> None:
-        self._pygame.quit()
+        self._pygame.joystick.quit()
+        self._pygame.display.quit()

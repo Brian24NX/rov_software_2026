@@ -1,30 +1,11 @@
-"""
-Mission control GUI: CustomTkinter screens + pygame controller polling.
-
-Run the backend first (from ``project/``, venv active):
-  python run_backend.py
-  # or: python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-
-Then start the GUI:
-  python gui/app.py
-
-If the process aborts with a macOS version message, run:
-  python diagnose_gui.py
-If it dies at tkinter.Tk(), your Python's Tcl/Tk targets a newer macOS than
-yours — recreate the venv with Homebrew ``python@3.12`` (see diagnose_gui.py).
-
-Architecture: screens render UI; gui.api talks to FastAPI; input is polled on a
-timer. Keyboard uses Tk bindings. Pygame is optional and never loaded on macOS
-(see requirements-joystick.txt for Linux/Windows gamepad support).
-"""
+"""Mission desktop; HTTP work runs off the Tk thread, with vehicle feedback."""
 from __future__ import annotations
 
-import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+import queue
+import sys
 
-# Project root before any `gui.*` import (must run before third-party imports
-# that might confuse package resolution).
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
@@ -39,319 +20,286 @@ from gui.screens.task_menu import TaskMenuScreen
 from gui.screens.thrusters import ThrusterScreen
 from gui.screens.upload_screen import UploadScreen
 
-Screen = Union[
-    HomeScreen, TaskMenuScreen, TaskDetailScreen, UploadScreen, ThrusterScreen
-]
-State = Literal["home", "menu", "detail", "upload", "thrusters"]
-
 
 class MissionApp(ctk.CTk):
-    """Single window; swaps frames and routes controller events."""
-
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
-        self.title("Matrov — Mission Control")
-        self.geometry("640x720")
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
-
-        self._state: State = "home"
-        self._tasks: List[Dict[str, Any]] = []
-        self._current_task: Dict[str, Any] = {}
+        self.title('Matrov — Mission Control')
+        self.geometry('680x760')
+        ctk.set_appearance_mode('dark')
+        self._state, self._screen = 'home', None
+        self._tasks, self._current_task = [], {}
+        self._uploads = {}
+        self._vehicle_armed = None
+        self._closing = False
+        self._destroyed = False
+        self._pending = set()
+        self._results = queue.Queue()
+        self._workers = ThreadPoolExecutor(max_workers=3, thread_name_prefix='gui-http')
+        # Ordered control requests prevent a delayed arm from overtaking stop/close.
+        self._control_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='gui-control')
         self._container = ctk.CTkFrame(self)
-        self._container.pack(fill="both", expand=True)
-
+        self._container.pack(fill='both', expand=True)
         self._footer = ctk.CTkFrame(self)
-        self._footer.pack(fill="x", side="bottom")
-        foot_row1 = ctk.CTkFrame(self._footer, fg_color="transparent")
-        foot_row1.pack(fill="x")
-        self._backend_lbl = ctk.CTkLabel(
-            foot_row1,
-            text="Backend: checking…",
-            font=ctk.CTkFont(size=11),
-        )
-        self._backend_lbl.pack(side="left", padx=8, pady=(4, 0))
-        self._mission_lbl = ctk.CTkLabel(
-            foot_row1,
-            text="Mission status: READY",
-            font=ctk.CTkFont(size=11),
-        )
-        self._mission_lbl.pack(side="right", padx=8, pady=(4, 0))
-        self._input_lbl = ctk.CTkLabel(
-            self._footer,
-            text="Input: …",
-            font=ctk.CTkFont(size=11),
-            text_color="gray",
-            anchor="w",
-        )
-        self._input_lbl.pack(fill="x", padx=8, pady=(0, 6))
-
-        self._screen: Optional[Screen] = None
+        self._footer.pack(fill='x', side='bottom')
+        self._backend_lbl = ctk.CTkLabel(self._footer, text='Vehicle: checking…')
+        self._backend_lbl.pack(fill='x')
+        self._sensor_lbl = ctk.CTkLabel(self._footer, text='Sensors: waiting for data')
+        self._sensor_lbl.pack(fill='x')
+        self._mission_lbl = ctk.CTkLabel(self._footer, text='Mission: idle', wraplength=640)
+        self._mission_lbl.pack(fill='x')
+        self._input_lbl = ctk.CTkLabel(self._footer, text='', wraplength=640)
+        self._input_lbl.pack(fill='x')
         self._controller = build_mission_input(self)
-        self._input_lbl.configure(text=self._controller.status_hint())
-
         self._show_home()
-        self._check_backend()
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.bind_all('<Escape>', self._escape, add=True)
+        self.after(40, self._drain_results)
         self.after(50, self._input_tick)
+        self._check_backend()
 
-    def destroy(self) -> None:  # noqa: A003 — Tk name
-        self._controller.close()
-        super().destroy()
+    def _submit(self, work, done, failed=None, key=None, control=False):
+        if key and key in self._pending:
+            return
+        if key:
+            self._pending.add(key)
+        pool = self._control_worker if control else self._workers
+        future = pool.submit(work)
+        future.add_done_callback(lambda result: self._results.put((result, done, failed, key)))
 
-    # --- mission status (bonus indicator) ---------------------------------
-    def _set_mission_status(self, text: str) -> None:
-        self._mission_lbl.configure(text=f"Mission status: {text}")
+    def _drain_results(self):
+        while not self._results.empty():
+            future, done, failed, key = self._results.get_nowait()
+            self._pending.discard(key)
+            try:
+                value = future.result()
+            except Exception as exc:
+                (failed or self._toast)(str(exc))
+            else:
+                done(value)
+            if self._destroyed:
+                return
+        self.after(40, self._drain_results)
 
-    def _reset_mission_ready(self) -> None:
-        self._set_mission_status("READY")
+    def _check_backend(self):
+        if self._closing:
+            return
+        self._submit(lambda: api_mod.send_command({'command': 'get_status'}),
+                     self._receive_status, self._status_error, key='status')
+        self.after(1000, self._check_backend)
 
-    def _set_mission_uploaded(self) -> None:
-        self._set_mission_status("UPLOADED")
+    def _status_error(self, detail):
+        self._vehicle_armed = None
+        self._backend_lbl.configure(text=f'Vehicle: UNKNOWN — {detail[:100]}')
+        self._sensor_lbl.configure(text='Sensors: telemetry unavailable')
+        if isinstance(self._screen, ThrusterScreen):
+            self._screen.set_status(None, 'No fresh vehicle acknowledgment')
 
-    def _set_mission_sent(self) -> None:
-        self._set_mission_status("SENT")
+    def _receive_status(self, result):
+        if not result.get('connected') or result.get('control') is None:
+            self._status_error(result.get('detail', 'No fresh vehicle heartbeat'))
+            return
+        state = result['control']
+        self._vehicle_armed = state['armed']
+        label = 'ARMED' if state['armed'] else 'DISARMED'
+        if state.get('inhibited'):
+            label += ' — actuation inhibited'
+        if not state.get('serial_connected'):
+            label += ' — serial unavailable'
+        self._backend_lbl.configure(text=f'Vehicle: {label}')
+        ages = result.get('sensors', {})
+        self._sensor_lbl.configure(text=' | '.join(
+            f'{name}: ' + ('live' if ages.get(name, float('inf')) < 2 else 'no fresh data')
+            for name in ('camera', 'imu', 'pressure', 'zed')))
 
-    # --- backend health -----------------------------------------------------
-    def _check_backend(self) -> None:
-        err = api_mod.check_backend()
-        if err:
-            self._backend_lbl.configure(
-                text=f"Backend: OFFLINE ({err[:60]}…)"
-                if len(err) > 60
-                else f"Backend: OFFLINE ({err})",
-                text_color="#e74c3c",
-            )
-        else:
-            self._backend_lbl.configure(
-                text="Backend: OK (127.0.0.1:8000)",
-                text_color="#2ecc71",
-            )
+        if result.get('mission_status'):
+            self._mission_lbl.configure(text='Mission: ' + result['mission_status'])
+        if isinstance(self._screen, ThrusterScreen):
+            self._screen.set_status(state['armed'], state.get('reason', ''))
 
-    # --- screen helpers -----------------------------------------------------
-    def _clear_screen(self) -> None:
+    def _clear_screen(self):
         if self._screen is not None:
             self._screen.destroy()
-            self._screen = None
+        self._screen = None
 
-    def _show_home(self) -> None:
-        self._state = "home"
+    def _mount(self, state, screen_class, *args):
         self._clear_screen()
-        self._screen = HomeScreen(self._container)
-        self._screen.pack(fill="both", expand=True)
-        self._reset_mission_ready()
+        self._state = state
+        self._screen = screen_class(self._container, *args)
+        self._screen.pack(fill='both', expand=True)
 
-    def _show_menu(self) -> None:
-        self._state = "menu"
+    def _show_home(self):
+        self._mount('home', HomeScreen)
+
+    def _show_menu(self):
         self._clear_screen()
-        try:
-            self._tasks = api_mod.get_tasks()
-        except Exception as exc:  # noqa: BLE001
-            self._screen = ctk.CTkLabel(
-                self._container,
-                text=(
-                    f"Could not load tasks:\n{exc}\n\n"
-                    "Press Esc to go back."
-                ),
-                font=ctk.CTkFont(size=14),
-                justify="left",
-            )
-            self._screen.pack(expand=True)
-            return
-        if not self._tasks:
-            self._screen = ctk.CTkLabel(
-                self._container,
-                text="No tasks returned from the server.\n\nPress Esc to go back.",
-                font=ctk.CTkFont(size=14),
-            )
-            self._screen.pack(expand=True)
-            return
-        self._screen = TaskMenuScreen(self._container, self._tasks)
-        self._screen.pack(fill="both", expand=True)
+        self._state = 'menu'
+        loading = ctk.CTkLabel(self._container, text='Loading tasks… (Esc to go back)')
+        self._screen = loading
+        loading.pack(expand=True)
 
-    def _show_detail(self, task: Dict[str, Any]) -> None:
-        self._state = "detail"
+        def loaded(tasks):
+            if self._screen is loading:
+                self._tasks = tasks
+                self._mount('menu', TaskMenuScreen, tasks)
+        self._submit(api_mod.get_tasks, loaded, self._toast)
+
+    def _show_detail(self, task):
         self._current_task = task
-        self._clear_screen()
-        self._screen = TaskDetailScreen(self._container, task)
-        self._screen.pack(fill="both", expand=True)
-        self._reset_mission_ready()
+        self._mount('detail', TaskDetailScreen, task)
 
-    def _show_thrusters(self) -> None:
-        self._state = "thrusters"
-        self._clear_screen()
-        self._screen = ThrusterScreen(self._container)
-        self._screen.pack(fill="both", expand=True)
+    def _show_thrusters(self):
+        self._mount('thrusters', ThrusterScreen)
 
-    def _show_upload(self, task_id: str) -> None:
-        self._state = "upload"
-        self._clear_screen()
-        self._screen = UploadScreen(self._container, task_id)
-        self._screen.pack(fill="both", expand=True)
+    def _show_upload(self, task_id):
+        self._mount('upload', UploadScreen, task_id)
 
-    # --- input loop ---------------------------------------------------------
-    def _input_tick(self) -> None:
+    def _input_tick(self):
+        if self._closing:
+            return
         try:
-            for ev in self._controller.poll():
-                self._dispatch_nav(ev)
-        except Exception:
-            pass
+            # Once armed, sticks/buttons belong exclusively to vehicle control.
+            allow_joy = self._vehicle_armed is False and 'control' not in self._pending
+            for event in self._controller.poll(allow_joystick=allow_joy):
+                self._dispatch_nav(event)
+            self._input_lbl.configure(text=self._controller.status_hint())
+        except Exception as exc:
+            self._input_lbl.configure(text=f'Input error: {exc}')
         self.after(50, self._input_tick)
 
-    def _dispatch_nav(self, ev: str) -> None:
-        if ev == "up":
-            self._nav_move(-1)
-        elif ev == "down":
-            self._nav_move(1)
-        elif ev == "select":
+    def _escape(self, event=None):
+        if self._state == 'thrusters' or self._vehicle_armed is not False:
+            self._stop()
+
+    def _dispatch_nav(self, event):
+        if event in ('up', 'down'):
+            self._nav_move(-1 if event == 'up' else 1)
+        elif event == 'select':
             self._nav_select()
-        elif ev == "back":
+        elif event == 'back':
             self._nav_back()
 
-    def _nav_move(self, delta: int) -> None:
-        s = self._screen
-        if s is None:
-            return
-        if isinstance(s, ctk.CTkLabel):
-            return
-        s.move(delta)
+    def _nav_move(self, delta):
+        if hasattr(self._screen, 'move'):
+            self._screen.move(delta)
 
-    def _nav_select(self) -> None:
-        s = self._screen
-        if s is None:
-            return
-
-        if isinstance(s, ctk.CTkLabel):
-            # Error / empty-task message on task menu — Enter returns home.
-            if self._state == "menu":
-                self._show_home()
-            return
-
-        if self._state == "home" and isinstance(s, HomeScreen):
-            choice = s.selected_label()
-            if choice == "Browse Tasks":
+    def _nav_select(self):
+        screen = self._screen
+        if isinstance(screen, HomeScreen):
+            {'Browse Tasks': self._show_menu, 'Thruster Control': self._show_thrusters,
+             'Exit': self.destroy}[screen.selected_label()]()
+        elif isinstance(screen, ThrusterScreen):
+            action = screen.selected_action()
+            if action == 'Back':
+                self._nav_back()
+            else:
+                self._set_thrusters(screen, action == 'Arm thrusters')
+        elif isinstance(screen, TaskMenuScreen):
+            task_id = screen.selected_task_id()
+            if task_id:
+                def loaded(task):
+                    if self._screen is screen:
+                        self._show_detail(task)
+                self._submit(lambda: api_mod.get_task(task_id), loaded, key='detail')
+        elif isinstance(screen, TaskDetailScreen):
+            action, task_id = screen.selected_action(), screen.task_id()
+            if action == 'Upload images':
+                self._show_upload(task_id)
+            elif action == 'Run reconstruction':
+                self._run_reconstruction_command(task_id)
+            elif action == 'Back':
                 self._show_menu()
-            elif choice == "Thruster Control":
-                self._show_thrusters()
-            elif choice == "Exit":
-                self.destroy()
-            return
-
-        if self._state == "thrusters" and isinstance(s, ThrusterScreen):
-            act = s.selected_action()
-            if act == "Run thrusters":
-                self._set_thrusters(s, True)
-            elif act == "Stop thrusters":
-                self._set_thrusters(s, False)
-            elif act == "Back":
-                self._show_home()
-            return
-
-        if self._state == "menu" and isinstance(s, TaskMenuScreen):
-            tid = s.selected_task_id()
-            if not tid:
-                return
-            try:
-                task = api_mod.get_task(tid)
-            except Exception as exc:  # noqa: BLE001
-                self._toast(str(exc))
-                return
-            self._show_detail(task)
-            return
-
-        if self._state == "detail" and isinstance(s, TaskDetailScreen):
-            act = s.selected_action()
-            tid = s.task_id()
-            if act == "Upload images":
-                self._show_upload(tid)
-            elif act == "Send run_task command":
-                self._run_task_command(tid)
-            elif act == "Run reconstruction":
-                self._run_reconstruction_command(tid)
-            elif act == "Back":
-                self._show_menu()
-            return
-
-        if self._state == "upload" and isinstance(s, UploadScreen):
-            act = s.selected_action()
-            if act == "Choose files…":
-                s.choose_files()
-            elif act == "Upload to server":
-                self._do_upload(s)
-            elif act == "Back":
+        elif isinstance(screen, UploadScreen):
+            action = screen.selected_action()
+            if action == 'Choose files…':
+                screen.choose_files()
+            elif action == 'Upload to server':
+                self._do_upload(screen)
+            elif action == 'Back':
                 self._show_detail(self._current_task)
-            return
 
-    def _nav_back(self) -> None:
-        if self._state == "home":
-            return
-        if self._state == "menu":
+    def _nav_back(self):
+        if self._state == 'thrusters':
+            self._stop()
             self._show_home()
-        elif self._state == "thrusters":
+        elif self._state == 'menu':
             self._show_home()
-        elif self._state == "detail":
+        elif self._state == 'detail':
             self._show_menu()
-        elif self._state == "upload":
+        elif self._state == 'upload':
             self._show_detail(self._current_task)
 
-    def _do_upload(self, screen: UploadScreen) -> None:
+    def _do_upload(self, screen):
         paths = screen.file_paths()
         if not paths:
-            screen.set_status("Select files first.", ok=False)
+            screen.set_status('Select files first.', ok=False)
             return
-        try:
-            api_mod.upload_images(screen.task_id, paths)
-        except Exception as exc:  # noqa: BLE001
-            screen.set_status(f"Upload failed: {exc}", ok=False)
+        screen.set_status('Uploading…')
+
+        def done(result):
+            self._uploads[screen.task_id] = result['saved_files']
+            self._mission_lbl.configure(text=f"Mission: {result['count']} images uploaded")
+            if self._screen is screen:
+                screen.set_status('Upload successful.')
+
+        def failed(detail):
+            if self._screen is screen:
+                screen.set_status(f'Upload failed: {detail}', ok=False)
+        self._submit(lambda: api_mod.upload_images(screen.task_id, paths), done, failed, key='upload')
+
+    def _set_thrusters(self, screen, running):
+        if running and ('control' in self._pending or self._closing):
             return
-        screen.set_status("Upload successful.", ok=True)
-        self._set_mission_uploaded()
+        command = 'enable_thrusters' if running else 'disable_thrusters'
+        if isinstance(screen, ThrusterScreen) and screen is self._screen:
+            screen.set_status(None, 'Waiting for vehicle acknowledgment…')
 
-    def _set_thrusters(self, screen: ThrusterScreen, running: bool) -> None:
-        command = "enable_thrusters" if running else "disable_thrusters"
-        try:
-            api_mod.send_command({"command": command})
-        except Exception as exc:  # noqa: BLE001
-            screen.set_status(None, str(exc))
-            self._toast(f"{command} failed: {exc}")
+        def done(result):
+            state = result.get('control')
+            if not result.get('acknowledged') or state is None:
+                self._status_error('Missing vehicle acknowledgment')
+                return
+            self._receive_status({'connected': True, 'control': state})
+        # Stop is never deduplicated behind an in-flight arm request.
+        self._submit(lambda: api_mod.send_command({'command': command}), done,
+                     self._status_error, key='control' if running else None, control=True)
+
+    def _stop(self):
+        self._set_thrusters(self._screen, False)
+
+    def _run_reconstruction_command(self, task_id):
+        self._submit(lambda: api_mod.send_command(
+            {'command': 'run_reconstruction', 'task_id': task_id}),
+            lambda result: self._mission_lbl.configure(text='Mission: capture requested'),
+            key='reconstruction')
+
+    def _toast(self, message):
+        self._mission_lbl.configure(text=str(message)[:180])
+
+    def destroy(self):
+        if self._closing:
             return
-        screen.set_status(running)
-        self._set_mission_status("THRUSTERS RUNNING" if running else "READY")
+        self._closing = True
+        self._backend_lbl.configure(text='Closing: requesting disarm…')
+        self._submit(lambda: api_mod.send_command({'command': 'disable_thrusters'}),
+                     lambda result: self._finish_close(),
+                     lambda error: self._finish_close(error), control=True)
 
-    def _run_task_command(self, task_id: str) -> None:
-        try:
-            api_mod.send_command({"command": "run_task", "task_id": task_id})
-        except Exception as exc:  # noqa: BLE001
-            self._toast(f"Command failed: {exc}")
-            return
-        self._set_mission_sent()
-        self._toast(f"run_task sent for {task_id}")
-
-    def _run_reconstruction_command(self, task_id: str) -> None:
-        try:
-            api_mod.send_command(
-                {"command": "run_reconstruction", "task_id": task_id}
-            )
-        except Exception as exc:  # noqa: BLE001
-            self._toast(f"Reconstruction failed: {exc}")
-            return
-        self._set_mission_sent()
-        self._toast(f"run_reconstruction sent for {task_id}")
-
-    def _toast(self, message: str) -> None:
-        # Lightweight feedback without extra dialogs.
-        win = ctk.CTkToplevel(self)
-        win.title("Notice")
-        win.geometry("420x120")
-        ctk.CTkLabel(win, text=message, wraplength=380).pack(
-            expand=True, padx=12, pady=12
-        )
-        win.after(2500, win.destroy)
+    def _finish_close(self, error=None):
+        if error:
+            print(f'GUI close: disarm unconfirmed: {error}', file=sys.stderr)
+        self._controller.close()
+        self._workers.shutdown(wait=False, cancel_futures=True)
+        self._control_worker.shutdown(wait=False, cancel_futures=True)
+        self._destroyed = True
+        for timer in self.tk.call('after', 'info'):
+            self.after_cancel(timer)
+        super().destroy()
 
 
-def main() -> None:
-    app = MissionApp()
-    app.mainloop()
+def main():
+    MissionApp().mainloop()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -1,123 +1,49 @@
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Imu
-import smbus
+"""ICM-20649 at +/-4g and +/-500 deg/s, published in ROS SI units."""
 import time
 
-addr = 0x68
+import rclpy
+from rclpy.executors import ExternalShutdownException
+from sensor_msgs.msg import Imu
 
-REG_BANK_SEL = 0x7F
+from materov.i2c_sensor import I2CSensorNode
+from materov.sensor_math import decode_icm20649
 
-# Bank 0
-WHO_AM_I   = 0x00
-USER_CTRL  = 0x03
-LP_CONFIG  = 0x05
-PWR_MGMT_1 = 0x06
 
-# Raw data registers are in bank 0 on this device family
-ACCEL_XOUT_H = 0x2D
-ACCEL_XOUT_L = 0x2E
-ACCEL_YOUT_H = 0x2F
-ACCEL_YOUT_L = 0x30
-ACCEL_ZOUT_H = 0x31
-ACCEL_ZOUT_L = 0x32
-
-GYRO_XOUT_H = 0x33
-GYRO_XOUT_L = 0x34
-GYRO_YOUT_H = 0x35
-GYRO_YOUT_L = 0x36
-GYRO_ZOUT_H = 0x37
-GYRO_ZOUT_L = 0x38
-
-# Bank 2 config registers
-GYRO_SMPLRT_DIV   = 0x00
-GYRO_CONFIG_1     = 0x01
-ACCEL_SMPLRT_DIV_1 = 0x10
-ACCEL_SMPLRT_DIV_2 = 0x11
-ACCEL_CONFIG      = 0x14
-
-class ImuSensorNode(Node):
+class ImuSensorNode(I2CSensorNode):
     def __init__(self):
-        super().__init__('imu_sensor_node')
+        super().__init__('imu_sensor_node', 0x68)
+        self.pub = self.create_publisher(Imu, '/imu/data_raw', 10)
+        self.create_timer(0.02, self.sample)
 
-        self.bus = smbus.SMBus(7)
+    def select_bank(self, bank):
+        self.bus.write_byte_data(self.address, 0x7F, bank << 4)
 
-        # Initialize IMU sensor
+    def initialize_sensor(self):
         self.select_bank(0)
-        self.bus.write_byte_data(addr, LP_CONFIG, 0x00)
-        self.bus.write_byte_data(addr, PWR_MGMT_1, 0x01)
+        identity = self.bus.read_byte_data(self.address, 0x00)
+        if identity != 0xE1:
+            raise ValueError(f'Expected ICM-20649 WHO_AM_I=0xe1; got 0x{identity:02x}')
+        self.bus.write_byte_data(self.address, 0x05, 0)
+        self.bus.write_byte_data(self.address, 0x06, 1)
+        self.bus.write_byte_data(self.address, 0x07, 0)
         time.sleep(0.05)
         self.select_bank(2)
-        # About 55Hz if divider = 19, based on SparkFun / InvenSense example formulas
-        self.bus.write_byte_data(addr, GYRO_SMPLRT_DIV, 19)
-        self.bus.write_byte_data(addr, ACCEL_SMPLRT_DIV_1, 0x00)
-        self.bus.write_byte_data(addr, ACCEL_SMPLRT_DIV_2, 19)
-        self.bus.write_byte_data(addr, GYRO_CONFIG_1, 0x01)   # low range starter config
-        self.bus.write_byte_data(addr, ACCEL_CONFIG, 0x01)    # low range starter config
-        time.sleep(0.05)
+        for register, value in ((0x00, 19), (0x10, 0), (0x11, 19),
+                                (0x01, 0x01), (0x14, 0x01)):
+            self.bus.write_byte_data(self.address, register, value)
         self.select_bank(0)
 
-        self.pub = self.create_publisher(Imu, '/imu/data_raw', 10)
-
-        # 50 Hz
-        self.timer = self.create_timer(0.02, self.publish_imu)
-
-        self.get_logger().info("IMU publisher node started...")
-
-    def publish_imu(self):
+    def publish_sample(self):
+        block = self.bus.read_i2c_block_data(self.address, 0x2D, 12)
+        acceleration, gyro = decode_icm20649(block)
         msg = Imu()
-
-        ax = self.read_word_2c(ACCEL_XOUT_H)  # Assuming a sensitivity of 16384 LSB/g for ±2g range
-        ay = self.read_word_2c(ACCEL_YOUT_H)
-        az = self.read_word_2c(ACCEL_ZOUT_H)
-
-        gx = self.read_word_2c(GYRO_XOUT_H)
-        gy = self.read_word_2c(GYRO_YOUT_H)
-        gz = self.read_word_2c(GYRO_ZOUT_H)
-
-        # Timestamp + frame
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "imu_link"
-
-        # Example dummy data (replace with real sensor values)
-        msg.linear_acceleration.x = float(ax)
-        msg.linear_acceleration.y = float(ay)
-        msg.linear_acceleration.z = float(az)
-
-        msg.angular_velocity.x = float(gx)
-        msg.angular_velocity.y = float(gy)
-        msg.angular_velocity.z = float(gz)
-
-        # No orientation
+        msg.header.frame_id = 'imu_link'
+        msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z = acceleration
+        msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z = gyro
         msg.orientation_covariance[0] = -1.0
-
-        # Covariances (recommended)
-        msg.angular_velocity_covariance = [
-            0.01, 0.0, 0.0,
-            0.0, 0.01, 0.0,
-            0.0, 0.0, 0.01
-        ]
-
-        msg.linear_acceleration_covariance = [
-            0.1, 0.0, 0.0,
-            0.0, 0.1, 0.0,
-            0.0, 0.0, 0.1
-        ]
-
+        # Zero covariances denote unknown, pending physical calibration.
         self.pub.publish(msg)
-
-        self.get_logger().debug("Published IMU data")
-    
-    def select_bank(self, bank):
-        self.bus.write_byte_data(addr, REG_BANK_SEL, bank << 4)
-
-    def read_word_2c(self, reg_h):
-        high = self.bus.read_byte_data(addr, reg_h)
-        low = self.bus.read_byte_data(addr, reg_h + 1)
-        value = (high << 8) | low
-        if value & 0x8000:
-            value -= 65536
-        return value
 
 
 def main(args=None):
@@ -125,9 +51,9 @@ def main(args=None):
     node = ImuSensorNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
-
+        if rclpy.ok():
+            rclpy.shutdown()

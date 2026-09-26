@@ -10,7 +10,7 @@ class TaskDetailScreen(ctk.CTkFrame):
     """
     Displays one task; bottom menu drives task actions.
 
-    Task 1.1 also gets a selectable reconstruction action.
+    Task 1.2 also gets a selectable reconstruction action.
     """
 
     def __init__(
@@ -25,8 +25,8 @@ class TaskDetailScreen(ctk.CTkFrame):
         self._action_labels: list[ctk.CTkLabel] = []
 
         tid = task.get("id", "")
-        self._actions = ["Upload images", "Send run_task command"]
-        if tid == "1.1":
+        self._actions = ["Upload images"]
+        if tid == "1.2":
             self._actions.append("Run reconstruction")
         self._actions.append("Back")
 

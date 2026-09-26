@@ -1,92 +1,90 @@
-import time
-import cv2
-import rclpy
-from rclpy.node import Node
+"""USB camera streaming with discovery and reconnection after capture failure."""
 from pathlib import Path
-from sensor_msgs.msg import CompressedImage, Image
+import time
+
+import cv2
 from cv_bridge import CvBridge
+import rclpy
+from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import CompressedImage, Image
 
 
-def _find_explorehd() -> int:
-    """Return the /dev/videoN index of the first non-ZED device listed in sysfs."""
-    for dev in range(10):
-        name_file = Path(f'/sys/class/video4linux/video{dev}/name')
-        if not name_file.exists():
+def camera_candidates():
+    candidates = []
+    for name_file in Path('/sys/class/video4linux').glob('video*/name'):
+        try:
+            name = name_file.read_text().lower()
+            if 'zed' not in name:
+                candidates.append(('explorehd' not in name,
+                                   int(name_file.parent.name.removeprefix('video'))))
+        except (OSError, ValueError):
             continue
-        if 'zed' not in name_file.read_text().strip().lower():
-            return dev
-    return 2
+    return [index for _, index in sorted(candidates)]
 
 
 class CameraNode(Node):
     def __init__(self):
         super().__init__('camera_node')
-
+        self.device = self.declare_parameter('device', 'auto').value
         self.bridge = CvBridge()
-
-        device = _find_explorehd()
         self.cap = None
-        deadline = time.monotonic() + 30.0
-        while time.monotonic() < deadline:
-            cap = cv2.VideoCapture(device)
-            if cap.isOpened():
-                ret, _ = cap.read()
-                if ret:
-                    self.cap = cap
-                    break
-                cap.release()
-            else:
-                cap.release()
-            self.get_logger().warn(f'Waiting for /dev/video{device} to become available...')
-            time.sleep(1.0)
-
-        if self.cap is None:
-            self.get_logger().error(
-                f'Could not open /dev/video{device} after 30s — running without camera.'
-            )
-            self.pub_compressed = self.create_publisher(CompressedImage, '/camera/image_compressed', 10)
-            self.pub_raw = self.create_publisher(Image, '/camera/image_raw', 10)
-            self.timer = self.create_timer(1.0 / 30.0, self.publish_frame)
-            return
-
-        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.get_logger().info(f'exploreHD opened at /dev/video{device} — {w}x{h}')
-
+        self.retry_at = 0.0
+        self.failures = 0
         self.pub_compressed = self.create_publisher(
-            CompressedImage, '/camera/image_compressed', 10
-        )
-        self.pub_raw = self.create_publisher(Image, '/camera/image_raw', 10)
+            CompressedImage, '/camera/image_compressed', qos_profile_sensor_data)
+        self.pub_raw = self.create_publisher(Image, '/camera/image_raw', qos_profile_sensor_data)
+        self.create_timer(1.0 / 30.0, self.publish_frame)
 
-        # 30 Hz
-        self.timer = self.create_timer(1.0 / 30.0, self.publish_frame)
+    def open_camera(self):
+        self.retry_at = time.monotonic() + 5.0
+        devices = camera_candidates() if self.device == 'auto' else [self.device]
+        for device in devices:
+            cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    self.cap = cap
+                    self.failures = 0
+                    self.get_logger().info(f'Camera connected: {device}, shape={frame.shape}')
+                    return
+            cap.release()
+        self.get_logger().warn('Camera unavailable; retrying discovery in 5s')
 
     def publish_frame(self):
         if self.cap is None:
+            if time.monotonic() >= self.retry_at:
+                self.open_camera()
             return
-        ret, frame = self.cap.read()
-        if not ret:
-            self.get_logger().warn('exploreHD: failed to read frame')
-            return
-
-        now = self.get_clock().now().to_msg()
-
-        ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        if ok:
+        try:
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                raise ValueError('No camera frame')
+            self.failures = 0
+            stamp = self.get_clock().now().to_msg()
+            ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if not ok:
+                raise ValueError('JPEG encoding failed')
             msg = CompressedImage()
-            msg.header.stamp = now
-            msg.header.frame_id = 'camera'
-            msg.format = 'jpeg'
-            msg.data = buf.tobytes()
+            msg.header.stamp, msg.header.frame_id = stamp, 'camera'
+            msg.format, msg.data = 'jpeg', buf.tobytes()
             self.pub_compressed.publish(msg)
-
-        raw_msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
-        raw_msg.header.stamp = now
-        raw_msg.header.frame_id = 'camera'
-        self.pub_raw.publish(raw_msg)
+            if self.pub_raw.get_subscription_count():
+                raw = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+                raw.header = msg.header
+                self.pub_raw.publish(raw)
+        except (cv2.error, ValueError) as exc:
+            self.failures += 1
+            if self.failures >= 5:
+                self.get_logger().warn(f'Camera lost; reconnecting: {exc}')
+                self.cap.release()
+                self.cap = None
+                self.retry_at = time.monotonic() + 1.0
 
     def destroy_node(self):
-        if self.cap is not None and self.cap.isOpened():
+        if self.cap is not None:
             self.cap.release()
         super().destroy_node()
 
@@ -96,11 +94,12 @@ def main(args=None):
     node = CameraNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

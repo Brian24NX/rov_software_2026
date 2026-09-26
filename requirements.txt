@@ -22,7 +22,7 @@
 # IMPORTANT: cv_bridge in ROS Humble was built against numpy 1.x.
 # DO NOT upgrade numpy to 2.x — cv_bridge will segfault.
 numpy>=1.24,<2.0
-opencv-python>=4.8.0,<5.0
+opencv-python>=4.8.0,<4.12
 # --- Serial (Jetson, signal_publisher_node → MCU) -----------
 pyserial>=3.5
 # --- Mission Control backend (FastAPI) ----------------------
@@ -39,5 +39,4 @@ customtkinter>=5.2.0
 # Skip on macOS — pygame SDL wheels abort on import.
 # Used by: mission_control/gui/joystick_pygame.py
 pygame>=2.5.0
-# --- Dev / tests --------------------------------------------
-pytest>=7.4.0
+Pillow>=9.0.0

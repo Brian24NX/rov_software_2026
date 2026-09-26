@@ -1,6 +1,8 @@
+"""API-facing bridge; connection means a recent vehicle control heartbeat."""
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -8,72 +10,51 @@ from typing import Any
 class RobotInterface:
     def __init__(self) -> None:
         self._controller = None
-        self._controller_error: str | None = None
-
-    def _ensure_ros_paths(self) -> None:
-        repo_root = Path(__file__).resolve().parents[2]
-        laptop_pkg_root = repo_root / "ros" / "src" / "laptop"
-        if str(laptop_pkg_root) not in sys.path:
-            sys.path.insert(0, str(laptop_pkg_root))
+        self._lock = threading.Lock()
 
     def _get_controller(self):
-        if self._controller is not None:
+        with self._lock:
+            if self._controller is None:
+                package = str(Path(__file__).resolve().parents[2] / 'ros/src/laptop')
+                if package not in sys.path:
+                    sys.path.insert(0, package)
+                try:
+                    from laptop.laptop_controller import LaptopController
+                    self._controller = LaptopController()
+                except Exception as exc:
+                    # Do not cache failures permanently: setup/network can recover.
+                    raise RuntimeError(f'ROS controller unavailable: {exc}') from exc
             return self._controller
-        if self._controller_error is not None:
-            raise RuntimeError(self._controller_error)
-
-        try:
-            self._ensure_ros_paths()
-            from laptop.laptop_controller import LaptopController
-
-            self._controller = LaptopController()
-            return self._controller
-        except Exception as exc:  # noqa: BLE001
-            self._controller_error = f"ROS controller unavailable: {exc}"
-            raise RuntimeError(self._controller_error) from exc
 
     def run_task(self, task_id: str) -> dict[str, Any]:
-        return {"ok": True, "task_id": task_id, "message": "task received"}
+        raise NotImplementedError('Automated task execution is not implemented; use the task instructions')
 
     def send_images(self, task_id: str, image_paths: list[str]) -> dict[str, Any]:
-        return {
-            "ok": True,
-            "task_id": task_id,
-            "image_paths": image_paths,
-            "count": len(image_paths),
-            "message": "images registered",
-        }
+        raise NotImplementedError('Image transfer through send_images is not implemented; uploads are stored on the laptop')
 
     def run_reconstruction(self, task_id: str, image_paths: list[str]) -> dict[str, Any]:
+        if image_paths:
+            raise ValueError('This command captures new ROV images; uploaded paths are not accepted')
         controller = self._get_controller()
-        controller.send_command("run_reconstruction")
-        return {
-            "ok": True,
-            "task_id": task_id,
-            "image_paths": image_paths,
-            "message": "reconstruction command sent",
-        }
+        if not controller.get_status()['connected']:
+            raise RuntimeError('Vehicle is not connected')
+        result = controller.send_command('run_reconstruction')
+        return {'ok': True, 'task_id': task_id, **result}
 
     def set_thrusters(self, enabled: bool) -> dict[str, Any]:
-        """Arm or disarm gamepad → thruster control on the Jetson.
-
-        Publishes to the same ``commands`` topic the other actions use;
-        ``signal_publisher_node`` holds every channel at neutral until it sees
-        ``enable_thrusters``.
-        """
-        command = "enable_thrusters" if enabled else "disable_thrusters"
-        controller = self._get_controller()
-        controller.send_command(command)
-        return {
-            "ok": True,
-            "enabled": enabled,
-            "message": f"{command} sent",
-        }
+        command = 'enable_thrusters' if enabled else 'disable_thrusters'
+        result = self._get_controller().send_command(command)
+        return {'ok': True, 'enabled': enabled, **result}
 
     def get_status(self) -> dict[str, Any]:
-        return {
-            "ok": True,
-            "connected": self._controller_error is None,
-            "mode": "ros2",
-            "detail": self._controller_error or "ready",
-        }
+        try:
+            return self._get_controller().get_status()
+        except RuntimeError as exc:
+            return {'ok': False, 'connected': False, 'control': None,
+                    'mode': 'ros2', 'detail': str(exc)}
+
+    def close(self):
+        with self._lock:
+            if self._controller is not None:
+                self._controller.close()
+                self._controller = None

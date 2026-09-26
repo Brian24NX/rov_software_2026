@@ -96,10 +96,13 @@ class CombinedInput:
             and getattr(joystick, "_joystick", None) is not None
         )
 
-    def poll(self) -> List[str]:
+    def poll(self, allow_joystick=True) -> List[str]:
         out = self._keyboard.poll()
         if self._joy is not None:
-            out.extend(self._joy.poll())  # type: ignore[attr-defined]
+            events = self._joy.poll()
+            if allow_joystick:
+                out.extend(events)
+            self.joystick_active = self._joy._joystick is not None
         return out
 
     def close(self) -> None:

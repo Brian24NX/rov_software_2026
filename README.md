@@ -4,7 +4,7 @@
 
 ## Overview
 
-Readme for the integration-testing branch. This branch mainly contains the finished networking work and the integration between Raneem's [Desktop Control System](https://github.com/MATEROV2026/rov_software_2026/tree/Desktop_control_system), Ahmad's ROS config, and Mingyue's [controller config and signal publisher](https://github.com/MATEROV2026/rov_software_2026/tree/mingyue).
+Readme for the integration-2.0 branch. This branch mainly contains the finished networking work and the integration between Raneem's [Desktop Control System](https://github.com/MATEROV2026/rov_software_2026/tree/Desktop_control_system), Ahmad's ROS config, and Mingyue's [controller config and signal publisher](https://github.com/MATEROV2026/rov_software_2026/tree/mingyue).
 
 ---
 
@@ -60,7 +60,7 @@ rov_software_2026/
 
 ### Hardware
 
-- **Jetson Nano** (Ubuntu 20.04, ROS 2 Humble), underwater vehicle controller
+- **Jetson Nano** (Ubuntu 22.04, ROS 2 Humble), underwater vehicle controller
 - **Laptop** (Ubuntu 22.04, ROS 2 Humble), mission control and vision
 - Direct Ethernet cable between them (no WiFi, no router)
 - ZED 2i stereo camera and exploreHD USB camera on the Nano
@@ -87,45 +87,59 @@ ROS 2 uses CycloneDDS bound only to the Ethernet interface. See `ros/config/lapt
 sudo apt install -y \
   ros-humble-desktop \
   python3-colcon-common-extensions \
-  ros-humble-rmw-cyclonedds-cpp
+  ros-humble-rmw-cyclonedds-cpp \
+  ros-humble-joy-linux ros-humble-cv-bridge \
+  python3-venv python3-tk python3-numpy python3-opencv python3-serial
 ```
 
 **Build the workspace:**
 
 ```bash
 export PATH="/usr/bin:$PATH"
+export PYTHONNOUSERSITE=1
 source /opt/ros/humble/setup.bash
 cd ros
 colcon build --packages-select interfaces laptop
+cd ..
 ```
 
-**Launch the laptop stack:**
+**Launch the laptop stack (from the repository root):**
 
 ```bash
-export PATH="/usr/bin:$PATH"
-source ros/install/setup.bash
-export ROS_LOCALHOST_ONLY=0
-export ROS_DOMAIN_ID=0
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export CYCLONEDDS_URI="file://$PWD/ros/config/laptop/cyclonedds.xml"
-ros2 launch laptop laptop.launch.py
+bash scripts/launch_laptop.sh
 ```
+
+The script sets the ROS environment and selects the wired DDS configuration. If
+Ethernet is disconnected, it starts in localhost-only mode; restart it after
+connecting the Nano.
+
+Before starting the nodes, the launcher checks live `/control/status` and prints
+an uppercase **ACTUATION INHIBITED**, **ACTUATION NOT INHIBITED**, or **ACTUATION
+STATUS UNKNOWN** message, including whether the vehicle is armed. The check waits
+up to eight seconds for a valid status; it does not arm or disarm the vehicle.
+UNKNOWN means the state could not be confirmed, not that the motors are inhibited.
 
 This starts:
 
-- `vision_node`, which opens two OpenCV windows (Main Camera and ZED). W/S/Q keys publish to `/commands`.
-- `reconstruction_service`, the ROS service for 3D reconstruction.
-- `joy_linux_node`, which reads the gamepad and publishes to `/joy`.
+- `vision_node`, which opens two OpenCV windows (Main Camera and ZED). Q or Escape requests disarm.
+- `reconstruction_service`, the ROS service for CPU COLMAP reconstruction (install COLMAP on the laptop).
+- `joy_linux_node`, which reads the gamepad and publishes to `/joy`, with 20 Hz autorepeat.
 
-> **Python note:** if you have Conda installed, `export PATH="/usr/bin:$PATH"` is required so `python3` resolves to system 3.10. ROS Humble's C extensions will not load under 3.13.
+> **Python note:** if you have Conda installed, `export PATH="/usr/bin:$PATH"` is required so `python3` resolves to system 3.10. ROS Humble's C extensions will not load under 3.13. Keep ROS on the system NumPy/OpenCV packages; the launch scripts disable user-site packages.
 
 ---
 
 ### Jetson Nano setup
 
-**First-time install (once):**
+**First-time install (once, from the Nano repository root):**
 
 ```bash
+sudo apt install python3-smbus python3-numpy python3-opencv python3-serial
+export PATH="/usr/bin:$PATH" PYTHONNOUSERSITE=1
+source /opt/ros/humble/setup.bash
+cd ros
+colcon build --packages-select interfaces materov
+cd ..
 bash scripts/install_autostart.sh
 ```
 
@@ -135,7 +149,10 @@ This installs a systemd service that auto-launches the full ROV stack on every b
 
 ```bash
 sudo systemctl stop rov-launch
-source ~/ros2_ws/install/setup.bash
+export PATH="/usr/bin:$PATH" PYTHONNOUSERSITE=1
+source /opt/ros/humble/setup.bash
+# Optional ZED overlay, if installed:
+# source ~/ros2_ws/install/setup.bash
 source ~/materov_workspace/rov_software_2026/ros/install/setup.bash
 export ROS_LOCALHOST_ONLY=0
 export ROS_DOMAIN_ID=0
@@ -156,29 +173,91 @@ This starts:
 
 - `jetson_node`, the mission orchestrator for commands and reconstruction capture.
 - `camera_node`, which publishes the exploreHD USB camera to `/camera/image_compressed`.
-- `signal_publisher_node`, which converts `/joy` into 6-DOF thruster PWM over serial.
+- `signal_publisher_node`, which converts `/joy` into 4-DOF thruster allocation and claw commands over serial.
 - `imu_sensor_node`, which publishes ICM-20649 data to `/imu/data_raw`.
 - `pressure_sensor_node`, which publishes MS5837 data to `/pressure/data_raw`.
-- `zed_node`, the ZED 2i stereo camera node. This is optional and included only if `zed_wrapper` is installed.
+- `zed_node`, the ZED 2i stereo camera node. This is optional and included only if `zed_wrapper` is installed; use `enable_zed:=false` to disable it.
 
 ---
 
 ### Mission Control GUI (Laptop)
 
-```bash
-cd mission_control
-pip install -r requirements.txt
-python run_backend.py
-python gui/app.py
-```
-
-Run the backend in one terminal (FastAPI on port 8000) and the GUI in another.
-
-For Linux/Windows joystick support in the GUI:
+From the repository root, create the environment once:
 
 ```bash
-pip install -r requirements-joystick.txt
+/usr/bin/python3 -m venv mission_control/.venv
+mission_control/.venv/bin/python -m pip install -r mission_control/requirements.txt
 ```
+
+For joystick navigation in the GUI:
+
+```bash
+mission_control/.venv/bin/python -m pip install -r mission_control/requirements-joystick.txt
+```
+
+With the laptop ROS stack running in another terminal, launch the backend and GUI:
+
+```bash
+bash scripts/launch_mission_control.sh
+```
+
+The launcher configures ROS and starts FastAPI on port 8000, or connects to the
+existing backend on that port. Arrows/Enter/Escape provide keyboard navigation.
+Gamepad menu navigation is disabled while armed or vehicle state is unknown.
+Leaving the thruster screen or closing the GUI requests disarm.
+
+### Vehicle control
+
+The vehicle starts disarmed. Arming requires a connected serial port and fresh,
+neutral joystick input. Loss of joystick input for 0.5 seconds or a serial fault
+disarms the vehicle; recovery requires a new arming request. Xbox View/Back,
+`stop`, and `disable_thrusters` request an immediate stop. The GUI displays the
+vehicle's acknowledged state and reports UNKNOWN when its heartbeat expires.
+
+`ROV_INHIBIT_ACTUATION=1` prevents both thruster and claw arming. The Nano's
+persistent setting is in `/etc/systemd/system/rov-launch.service.d/nonmotion-test.conf`:
+
+```ini
+[Service]
+Environment=ROV_INHIBIT_ACTUATION=1
+```
+
+To change it, SSH into the Nano and edit the override:
+
+```bash
+ssh m8rov123@192.168.2.2
+sudoedit /etc/systemd/system/rov-launch.service.d/nonmotion-test.conf
+sudo systemctl daemon-reload
+sudo systemctl restart rov-launch
+```
+
+Use `1` for inhibited testing and `0` to permit arming. This setting survives
+reboots. Change it only with the vehicle disarmed; for powered tests, use an
+approved setup with props/claw clear and someone at the physical power cutoff.
+The restarted service still begins **DISARMED**. Release all controller inputs,
+open **Thruster Control** in the GUI, select **Arm thrusters** with the keyboard,
+and press Enter. Wait for **ARMED** before moving the sticks. Xbox View/Back or
+Escape on the thruster screen requests disarm. Restore `1` and restart the service
+when returning to inhibited testing. The legacy `--direct_control`
+automatic-arming option is no longer supported.
+
+### Capture and reconstruction
+
+Task **1.2** captures six exploreHD images, five seconds apart, into a new Nano
+folder under `~/shared/captures/`. The images are sent to the laptop through
+`RunReconstruction`; a shared filesystem is not required. Rebuild `interfaces`
+and restart both stacks when updating this service definition.
+
+COLMAP produces a sparse `model.ply` under `~/rov-reconstructions/<job>/`, alongside
+images and logs. Capture/reconstruction progress and failures appear in the GUI.
+Images need overlapping views from different positions; repeated stationary
+views may not reconstruct. Only one capture/reconstruction job runs at a time.
+
+GUI uploads store images separately on the laptop; they do not feed the live
+capture workflow. Uploads accept JPEG/PNG/BMP/GIF files (20 files maximum,
+10 MiB per file, 50 MiB total) and use unique stored filenames. Other task catalog
+entries provide operator instructions; automated `run_task` and `send_images`
+actions are not implemented.
 
 ---
 
@@ -192,19 +271,19 @@ ros2 topic list
 ros2 topic echo /camera/image_compressed --no-arr
 ```
 
-You should see `/jetson_node`, `/signal_publisher`, `/vision_node`, and `/zed/zed_node` in the node list. You should also see `/camera/image_compressed`, `/joy`, `/commands`, and `/imu/data_raw` in the topic list.
+You should see `/jetson_node`, `/signal_publisher`, and `/vision_node` in the node list, plus `/zed/zed_node` when ZED is enabled. You should also see `/camera/image_compressed`, `/joy`, `/commands`, and `/imu/data_raw` in the topic list.
 
 ---
 
 ### Deploying to the Nano
 
-After pushing changes to GitHub, sync them to the Nano in one shot:
+To deploy commits already available on the Nano's tracked upstream branch:
 
 ```bash
 bash scripts/deploy_nano.sh
 ```
 
-This SSHes into the Nano (`m8rov123@192.168.2.2` by default), pulls the latest commits, rebuilds the interfaces and materov ROS packages with colcon, and restarts the `rov-launch` systemd service so the new code is live immediately. No manual SSH or service juggling should be needed.
+This SSHes into the Nano (`m8rov123@192.168.2.2` by default), performs a fast-forward pull, requests disarm, stops the service, rebuilds the interfaces and materov ROS packages with colcon, and restarts `rov-launch`. It refuses deployment if tracked Nano files have local modifications and does not push. Rebuild the laptop interfaces too when service definitions change.
 
 > Prerequisites: the Nano must be reachable over Ethernet, the autostart service must already be installed (see Jetson Nano setup), and your laptop must have SSH key access to the Nano. If not, be ready to type the password. The script uses `ssh -t`, so `sudo` can still prompt.
 
@@ -216,13 +295,15 @@ The config files at [`ros/config/laptop/cyclonedds.xml`](ros/config/laptop/cyclo
 
 | Direction | Topic | Content |
 |-----------|-------|---------|
-| Jetson → Laptop | `/camera/image_compressed` | JPEG frames from exploreHD at ~30 Hz |
+| Jetson → Laptop | `/camera/image_compressed` | JPEG frames from exploreHD (30 Hz target; actual rate depends on capture) |
 | Jetson → Laptop | `/zed/zed_node/rgb/image_rect_color/compressed` | ZED frames, if connected |
-| Jetson → Laptop | `/imu/data_raw` | Accel and gyro at 50 Hz |
-| Jetson → Laptop | `/pressure/data_raw` | Depth pressure at 10 Hz |
-| Jetson → Laptop | `/status` | Reconstruction status strings |
-| Laptop → Jetson | `/commands` | String commands, such as forward, run_reconstruction, etc. |
-| Laptop → Jetson | `/joy` | Joystick axes/buttons at 100 Hz |
+| Jetson → Laptop | `/imu/data_raw` | Acceleration (m/s²) and angular velocity (rad/s) at 50 Hz |
+| Jetson → Laptop | `/pressure/data_raw` | Absolute pressure in mbar at 10 Hz |
+| Jetson → Laptop | `/pressure/temperature` | Temperature in °C at 10 Hz |
+| Jetson → Laptop | `/status` | Capture/reconstruction status and model path |
+| Jetson → Laptop | `/control/status` | Arming, serial and joystick state at 5 Hz |
+| Laptop → Jetson | `/commands` | Control and capture commands; control requests can include acknowledgment IDs |
+| Laptop → Jetson | `/joy` | Joystick axes/buttons on change and at 20 Hz autorepeat |
 
 ## What was changed from other branches
 
@@ -235,8 +316,8 @@ The config files at [`ros/config/laptop/cyclonedds.xml`](ros/config/laptop/cyclo
 
 ### New code that did not exist on any branch
 
-- **Thrust allocation matrix (TAM)** with pseudo-inverse 6-DOF allocation.
-- **`camera_node`**, which was an empty stub on `main`. It now has exploreHD USB capture, auto-detection of the video device (skipping the ZED), and a 30-second retry loop.
+- **Thrust allocation matrix (TAM)** with pseudo-inverse 4-DOF allocation.
+- **`camera_node`**, which was an empty stub on `main`. It now has exploreHD USB capture, auto-detection of the video device (skipping the ZED), and periodic device discovery.
 - **7th thruster control**, which adds X/B button mapping for the claw motor.
 - **Async ramp queue**, which uses a stochastic shuffled queue so the thrusters do not all spike current at the same time.
 - **Laptop dual-camera vision**, so `vision_node` now shows both the main camera and the ZED simultaneously.
@@ -247,7 +328,7 @@ The config files at [`ros/config/laptop/cyclonedds.xml`](ros/config/laptop/cyclo
 
 ### Full 6-DOF thrust allocation
 
-The current TAM in `signal_publisher_node.py` solves for **4 DOF**: surge (Fx), sway (Fy), heave (Fz), and yaw (Mz). To get true 6-DOF control, we also need **roll (Mx)** and **pitch (My)**. The allocation also needs precise thruster geometry relative to the ROV's center of mass.
+The current TAM in `control.py` solves for **4 DOF**: surge (Fx), sway (Fy), heave (Fz), and yaw (Mz). To get true 6-DOF control, we also need **roll (Mx)** and **pitch (My)**. The allocation also needs precise thruster geometry relative to the ROV's center of mass.
 
 **What we have** (estimated and uncalibrated):
 
@@ -269,33 +350,20 @@ The current TAM in `signal_publisher_node.py` solves for **4 DOF**: surge (Fx), 
 
 ### ZED
 
-The ZED 2i is connected and streaming, but we are not actually using it for anything yet. Reconstruction was switched to the exploreHD because the ZED path was unreliable. Need to:
+The optional ZED feed is displayed when available. Reconstruction currently uses exploreHD images. Need to:
 
 - Decide which feed goes into the COLMAP / underwater mapping pipeline, probably the ZED with depth.
-- Wire `reconstruction_service` to actually run COLMAP. It currently returns fake success.
 - Use ZED depth data for obstacle awareness or scale-correct reconstruction.
-
-### GUI testing
-
-The GUI was integrated, but it has not been seriously stress-tested yet. Needs:
-
-- Full walkthrough of every screen and every task in `tasks.json`.
-- Verify the image upload flow end-to-end (multipart → backend → disk).
-- Verify that every command button actually reaches the Jetson.
-- Test the joystick navigation path.
-- Do a bug-fix pass on whatever falls out.
 
 ### One-command launch
 
-Right now, the laptop and Jetson each need their own launch sequence, including environment exports and sourcing. Goal:
-
-- Single launch file or shell script that brings up everything on the laptop side.
-- The Nano is already plug-and-play through the `rov-launch` systemd service. Keep it that way.
-- Ideally, one command on the laptop should also kick the Nano if it is not already up.
+The laptop ROS stack and mission desktop have separate launch scripts (see setup
+above). A combined launcher could bring up both and check that the Nano service
+is running. The Nano already starts through the `rov-launch` systemd service.
 
 ### Sensors
 
-The IMU and pressure sensor publish raw data, but nothing closes the loop yet. Need to:
+The sensor topics provide acceleration/angular velocity and absolute pressure, but nothing closes the loop yet. The pressure node defaults to MS5837 `pressure_model:=30BA`; select `02BA` for that sensor variant. Need to:
 
 - Use the IMU to detect actual ROV orientation and compensate for yaw/roll drift.
 - Use the pressure sensor to hold depth automatically.
@@ -304,8 +372,8 @@ The IMU and pressure sensor publish raw data, but nothing closes the loop yet. N
 
 ### Gamepad
 
-The current button/axis mapping in `joy_callback` is a placeholder layout from early prototyping. It needs to be redesigned around:
+The current layout uses left stick for surge/sway, right stick Y for heave, LB/RB for yaw, X/B for the claw, and View/Back for stop. Refine the layout around pilot feedback:
 
 - Which axes drive which DOF. Right now, left stick = surge/sway, right stick Y = heave, and LB/RB = yaw.
-- Which buttons trigger the claw, mode switches, and emergency stop.
+- Placement of claw, mode-switch and stop controls.
 - A layout that makes intuitive sense for a pilot during a mission run.

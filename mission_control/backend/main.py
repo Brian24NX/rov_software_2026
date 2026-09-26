@@ -20,7 +20,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 
@@ -33,14 +37,35 @@ from backend.routes.tasks import router as tasks_router
 from backend.routes.uploads import router as uploads_router
 from shared.robot_interface import RobotInterface
 
+_robot = RobotInterface()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    await run_in_threadpool(_robot.close)
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Matrov Mission Control API",
     description="REST API for ROV mission tasks, uploads, and robot commands.",
     version="0.1.0",
 )
 
-# Single process robot bridge used by the desktop app.
-_robot = RobotInterface()
+@app.exception_handler(RuntimeError)
+async def unavailable(request, exc):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(NotImplementedError)
+async def unsupported(request, exc):
+    return JSONResponse(status_code=501, content={"detail": str(exc)})
+
+
+@app.exception_handler(ValueError)
+async def invalid(request, exc):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 app.include_router(tasks_router)
 app.include_router(uploads_router)
@@ -74,6 +99,13 @@ def post_command(body: CommandBody) -> Dict[str, Any]:
       {"command": "send_images", "task_id": "1.1", "image_paths": [...]}
     """
     cmd = body.command.strip().lower()
+    if cmd in ('run_task', 'send_images', 'run_reconstruction'):
+        if not body.task_id:
+            raise HTTPException(status_code=400, detail='task_id required')
+        from backend.routes.tasks import get_task
+        get_task(body.task_id)
+        if cmd == 'run_reconstruction' and body.task_id != '1.2':
+            raise HTTPException(status_code=400, detail='Reconstruction belongs to task 1.2')
 
     if cmd == "run_task":
         if not body.task_id:
@@ -101,7 +133,7 @@ def post_command(body: CommandBody) -> Dict[str, Any]:
         paths = body.image_paths or []
         return _robot.run_reconstruction(body.task_id, paths)
 
-    if cmd in ("enable_thrusters", "disable_thrusters"):
+    if cmd in ("enable_thrusters", "disable_thrusters", "stop"):
         return _robot.set_thrusters(cmd == "enable_thrusters")
 
     raise HTTPException(status_code=400, detail=f"Unknown command: {body.command}")

@@ -93,7 +93,7 @@ def upload_images(
             mime = "image/jpeg"
         elif suffix == ".png":
             mime = "image/png"
-        safe_name = path.name.replace('"', "_")
+        safe_name = path.name.replace('"', '_').replace('\r', '_').replace('\n', '_')
         chunks.append(
             (
                 f"--{boundary}\r\n"
@@ -137,7 +137,7 @@ def send_command(
             "Content-Length": str(len(payload)),
         },
     )
-    data = _urlopen_json(req, timeout=30.0, base_url=base_url)
+    data = _urlopen_json(req, timeout=5.0, base_url=base_url)
     if not isinstance(data, dict):
         raise RuntimeError(f"Expected JSON object from /command, got {type(data)}")
     return data

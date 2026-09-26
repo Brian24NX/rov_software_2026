@@ -25,6 +25,7 @@ def generate_launch_description():
         package="joy_linux",
         executable="joy_linux_node",
         name="joy_linux_node",
+        parameters=[{"autorepeat_rate": 20.0, "deadzone": 0.05}],
         output="screen",
         respawn=True,
         respawn_delay=2.0,

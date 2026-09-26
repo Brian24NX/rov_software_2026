@@ -18,11 +18,6 @@ setup(
     maintainer_email='a.h.hamzeh@wustl.edu',
     description='TODO: Package description',
     license='TODO: License declaration',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
     entry_points={
         'console_scripts': [
             'jetson_node = materov.jetson_node:main',
