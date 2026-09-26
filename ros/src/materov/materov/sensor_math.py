@@ -1,19 +1,43 @@
 """Datasheet conversions, independent of I2C/ROS for regression testing.
 
 ICM-20649: TDK DS-000192 v1.1, tables 1/2 (FS_SEL=0).
+ICM-20948: TDK DS-000189 v1.6, sections 3.2/3.3 (FS_SEL=0).
 MS5837: TE 30BA/02BA second-order compensation and PROM CRC-4.
 Reference: https://github.com/bluerobotics/ms5837-python
 """
 import math
 import struct
 
+ICM20649_WHO_AM_I = 0xE1
+ICM20948_WHO_AM_I = 0xEA
+
+# LSB per g and LSB per deg/s at FS_SEL=0 with the DLPF enabled, which is what
+# ImuSensorNode.initialize_sensor writes. The two parts share a register layout
+# but not a full-scale range, so that same configuration yields +/-4g and
+# +/-500 deg/s on the 20649 against +/-2g and +/-250 deg/s on the 20948 -
+# a factor of two on both axes if the wrong table is used.
+_ICM_SCALE = {
+    ICM20649_WHO_AM_I: (8192.0, 65.5),
+    ICM20948_WHO_AM_I: (16384.0, 131.0),
+}
+
+
+def decode_icm(block, who_am_i=ICM20649_WHO_AM_I):
+    """Return (acceleration m/s^2, angular velocity rad/s) from a 12-byte burst."""
+    if len(block) != 12:
+        raise ValueError('ICM burst must be one 12-byte read')
+    scale = _ICM_SCALE.get(who_am_i)
+    if scale is None:
+        raise ValueError(f'Unsupported IMU WHO_AM_I 0x{who_am_i:02x}')
+    accel_lsb_per_g, gyro_lsb_per_dps = scale
+    raw = struct.unpack('>6h', bytes(block))
+    return ([v * 9.80665 / accel_lsb_per_g for v in raw[:3]],
+            [math.radians(v / gyro_lsb_per_dps) for v in raw[3:]])
+
 
 def decode_icm20649(block):
-    if len(block) != 12:
-        raise ValueError('ICM-20649 requires one 12-byte burst')
-    raw = struct.unpack('>6h', bytes(block))
-    return ([v * 9.80665 / 8192.0 for v in raw[:3]],
-            [math.radians(v / 65.5) for v in raw[3:]])
+    """Retained so existing callers and regression tests keep working."""
+    return decode_icm(block, ICM20649_WHO_AM_I)
 
 
 def prom_crc4(words):
