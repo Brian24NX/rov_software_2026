@@ -48,7 +48,7 @@ class MissionApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Matrov — Mission Control")
-        self.geometry("640x720")
+        self.geometry("720x800")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 

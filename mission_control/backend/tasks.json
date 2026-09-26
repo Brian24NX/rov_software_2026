@@ -1,11 +1,24 @@
 [
   {
     "id": "1.1",
+    "group": "Task 1: Seabed 2030 \u2014 A Kaleidoscope of Corals in Cold Water",
+    "venue": "Flume Tank (World Championship)",
+    "points": "Up to 30 pts",
     "title": "Collect species from the coral garden",
-    "instructions": [
-      "Collect two basket stars from the coral garden",
-      "Collect two coral species",
-      "Return collected specimens to the surface / designated area"
+    "overview": "Collect two basket stars and two coral species from the coral garden and return them to the surface, side of the pool.",
+    "procedure": [
+      "Two basket stars (O-balls on a 1/2\" PVC base, under 15N in water) will be within 2 meters of the coral garden.",
+      "Grip each basket star and lift it fully clear of the water, then place it on the pool deck. That action alone counts as a successful collection \u2014 5 pts each, 10 pts total.",
+      "Two coral species (chenille pipe-cleaner tufts on a 2\" end cap + 1/2\" PVC base, under 15N in water) sit on the coral garden itself.",
+      "Grip a coral by the 2\" end cap or PVC pipe ONLY (never the chenille) to score the full 10 pts for that coral.",
+      "Gripping a coral anywhere on the chenille pipe cleaners instead of the substrate still counts, but only scores 5 pts for that coral.",
+      "Lift each coral fully clear of the water and place it on the pool deck.",
+      "You can mix methods across the two corals (e.g., one by substrate for 10 pts, one not for 5 pts) \u2014 partial credit stacks per item, up to 20 pts total for both corals."
+    ],
+    "scoring_notes": [
+      "Basket stars: 5 pts each, 10 pts total.",
+      "Corals by substrate: 10 pts each; corals not by substrate: 5 pts each \u2014 up to 20 pts total.",
+      "\"Successfully returned\" = removed from the water and placed on the pool deck."
     ],
     "required_images": [
       "front_view",
@@ -16,10 +29,26 @@
   },
   {
     "id": "1.2",
-    "title": "Create a 3D image of the coral garden",
-    "instructions": [
-      "Create a 3D representation of the coral garden (autonomous photogrammetry or manual/CAD)",
-      "Ensure coverage documents the extent and structure of the habitat"
+    "group": "Task 1: Seabed 2030 \u2014 A Kaleidoscope of Corals in Cold Water",
+    "venue": "Flume Tank (World Championship)",
+    "points": "Up to 40 pts (autonomous) or 30 pts (manual CAD)",
+    "title": "Coral garden ridge modelling",
+    "overview": "Measure and build a scaled 3D model of the coral garden, either autonomously via photogrammetry or manually via CAD, showing the structure's true dimensions.",
+    "procedure": [
+      "PATH A \u2014 Autonomous photogrammetry (up to 40 pts):",
+      "Capture images/video covering the coral garden (1\u20132.5 m long, ~36 cm wide, unknown height, with eight 10x10 cm colored target squares attached). Manual piloting to capture the images is fine.",
+      "Transfer the images to a computer (this transfer does not need to be autonomous) and run your photogrammetry pipeline to build a rotatable 3D model in a CAD program.",
+      "Scoring for the model itself: all 8 targets visible = 20 pts, 4\u20137 targets = 15 pts, 1\u20133 targets = 10 pts, 0 targets (but a model exists) = 5 pts.",
+      "Measure the coral garden's length and report it to the judge \u2014 you must show your measurement or explain your estimation method, no guessing. Within 5 cm of true length = 10 pts. The judge then reveals the true length regardless of your accuracy.",
+      "Use the true length to scale your 3D model and display that length on the model = 5 pts.",
+      "Use the properly scaled model to estimate the garden's height, including any PVC tees on top, from bottom of structure to top = 5 pts if within 5 cm of true height.",
+      "PATH B \u2014 Manual CAD (up to 30 pts, mutually exclusive scoring with Path A, but you may attempt both and keep the better score):",
+      "Measure both length and height directly (within 5 cm of true for each) = 10 pts each, 20 pts total. Show your measurement or estimation method \u2014 no guessing. You may place a reference object of known dimensions near the garden to help (note: this becomes debris if not recovered or ROV-controlled by the end of the run).",
+      "Build a simplified 3D CAD model (just three rectangular prisms is enough \u2014 targets don't need to appear) displaying the length and height dimensions you measured, even if they were inaccurate = 10 pts."
+    ],
+    "scoring_notes": [
+      "If the autonomous model succeeds, use that score (up to 40); if it fails, the manual CAD score (up to 30) can still be claimed \u2014 you are not penalized for attempting both.",
+      "A company that never attempts to measure length will not receive the true length from the judge and cannot complete the scaling/height steps."
     ],
     "required_images": [
       "overview_scan",
@@ -29,10 +58,21 @@
   },
   {
     "id": "1.3",
-    "title": "Video transect in current (coral garden)",
-    "instructions": [
-      "Maintain position or fly a transect in simulated current",
-      "Record video that shows the coral garden for documentation"
+    "group": "Task 1: Seabed 2030 \u2014 A Kaleidoscope of Corals in Cold Water",
+    "venue": "Flume Tank (World Championship)",
+    "points": "15 pts",
+    "title": "Fly a transect / hold position over the coral garden",
+    "overview": "Maintain position over the coral garden's marked target area in a current, keeping only the inner zone visible on video.",
+    "procedure": [
+      "The target is a 50 cm blue-painted square with an outer 130 cm red-painted boundary square around it, on the pool bottom, in a running current.",
+      "Position and hold the ROV so the ENTIRE blue square stays in your video display continuously for 30 straight seconds.",
+      "No part of the red boundary square may become visible in that same display at any point during the hold.",
+      "If any red pipe appears, or the blue square isn't fully visible at all times, the attempt fails \u2014 reposition and restart a fresh, uninterrupted 30-second hold. Partial time does not carry over.",
+      "If you run multiple camera feeds, tell the judge which specific screen is the scored one; other views may show a wider field with no penalty."
+    ],
+    "scoring_notes": [
+      "15 pts, all-or-nothing based on the 30-second unbroken hold.",
+      "Regional competitions may substitute a start-to-end 'fly the transect' pass over a marked lane instead of station-keeping \u2014 check with your regional coordinator."
     ],
     "required_images": [
       "transect_start",
@@ -42,11 +82,20 @@
   },
   {
     "id": "2.1",
-    "title": "European green crab — count and report",
-    "instructions": [
-      "Determine the number of invasive European green crabs in the sample",
-      "Use image recognition or manual count as allowed",
-      "Upload results to the Invasive Species form"
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Flume Tank (World Championship)",
+    "points": "Up to 20 pts",
+    "title": "European Green crab \u2014 count and report",
+    "overview": "Identify and count invasive European Green crabs among native Rock and Jonah crabs on a laminated sample board, then log the count.",
+    "procedure": [
+      "A 50x50 cm corrugated plastic board holds laminated crab images: European Green, native Rock, and native Jonah crabs (sizes/rotations vary, but only these three species appear).",
+      "OPTION A \u2014 Image recognition (15 pts): run a program that autonomously detects and bounding-boxes every European Green crab and displays a total count on screen. You may pilot manually to frame the image, but the program \u2014 not a human reading the video \u2014 must do the identification and counting. Rock and Jonah crabs must NOT get bounding boxes or be included in the count.",
+      "OPTION B \u2014 Manual count (5 pts): a team member visually counts the Green crabs from the ROV feed and reports the number directly to the judge. You get exactly one chance to report \u2014 no guessing, no do-overs.",
+      "Submit your final Green crab count via the '2026 MATE ROV Competition \u2013 Invasive Species Reporting Form' (QR code at the mission station) and show the judge your submission confirmation screen for 5 pts."
+    ],
+    "scoring_notes": [
+      "Only report the Green crab count \u2014 Rock/Jonah counts are not required.",
+      "One shot at reporting the number; you cannot revise after telling the judge."
     ],
     "required_images": [
       "sample_tray_overview",
@@ -56,10 +105,20 @@
   },
   {
     "id": "2.2",
-    "title": "Iceberg survey — measure keel depth",
-    "instructions": [
-      "Survey the iceberg model",
-      "Measure and record keel depth for reporting"
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Flume Tank (World Championship)",
+    "points": "Up to 20 pts",
+    "title": "Iceberg survey \u2014 perimeter points and keel depth",
+    "overview": "Survey five numbered points around an iceberg model's perimeter and measure how far its underwater keel extends.",
+    "procedure": [
+      "The iceberg (PVC + bubble wrap/clear plastic) carries 5 sequential numbers (0\u20134 or 5\u20139): 4 at the corners (15 cm below the surface), plus 1 on the bottom end of a submerged keel extension.",
+      "Pilot to each of the five numbered points and show each one clearly on video for the judge. All 5 shown = 10 pts; only 1\u20134 shown = 5 pts.",
+      "Separately, measure how far the keel (a 0.5\u20131.5 m length of PVC hanging from one corner) extends below the surface.",
+      "Show your measurement or explain your estimation method to the judge \u2014 you cannot guess at the keel depth.",
+      "Scoring: within 5 cm of true depth = 10 pts; within 5.01\u201310 cm = 5 pts; beyond 10 cm = 0 pts."
+    ],
+    "scoring_notes": [
+      "This subtask feeds directly into Task 2.3 (threat assessment) \u2014 the judge will not hand over the iceberg info sheet until all 5 perimeter points are surveyed."
     ],
     "required_images": [
       "iceberg_profile",
@@ -69,10 +128,22 @@
   },
   {
     "id": "2.3",
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Flume Tank (World Championship)",
+    "points": "Up to 15 pts",
     "title": "Iceberg threat assessment for platforms",
-    "instructions": [
-      "Use location, heading, and keel depth of the iceberg",
-      "Determine threat level to the four oil platforms per mission rules"
+    "overview": "Use the iceberg's location, heading, and keel depth to determine its threat level to four offshore oil platforms and their subsea assets.",
+    "procedure": [
+      "After completing the 5-point perimeter survey (Task 2.2), the judge gives you an iceberg info sheet (lat/long, heading, true keel depth) and a platform map/table (Hibernia, Sea Rose, Terra Nova, Hebron \u2014 with lat/long and water depth at each).",
+      "Plot or track the iceberg's path relative to each platform on a paper or digital map. Remember: 1 minute of latitude = 1 nautical mile.",
+      "SURFACE PLATFORM threat level: >10 nm away = green; 5\u201310 nm = yellow; <5 nm = red. EXCEPTION: if keel depth is \u2265110% of a platform's water depth, the iceberg will ground before reaching it \u2014 always green regardless of distance.",
+      "Report all 4 surface threat levels to the judge: correct on all 4 = 10 pts; correct on exactly 3 = 5 pts; correct on 2 or fewer = 0 pts.",
+      "SUBSEA ASSET threat level (relevant only within 25 nm of a platform), based on keel depth vs. that platform's water depth: \u2265110% = green (grounds first); 90\u2013110% = red (critical danger); 70\u201390% = yellow (may impact seafloor); below 70% = green (safe clearance).",
+      "Report all 4 subsea threat levels \u2014 this is all-or-nothing: 5 pts only if all 4 are correct.",
+      "You get exactly ONE attempt at each set of threat-level calls. No re-evaluating after reporting, and everything must be reported before the demonstration time ends."
+    ],
+    "scoring_notes": [
+      "You must show the judge a map with the platform locations and the iceberg's track \u2014 no guessing at threat levels."
     ],
     "required_images": [
       "position_heading_notes",
@@ -81,10 +152,20 @@
   },
   {
     "id": "2.4",
-    "title": "Whale-safe gear — acoustic release and pot recovery",
-    "instructions": [
-      "Simulate acoustic release of retrieval buoy on whale-safe fishing gear",
-      "Recover the lobster pot per mission procedure"
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 20 pts",
+    "title": "Whale-safe gear \u2014 acoustic release and pot recovery",
+    "overview": "Simulate the acoustic release of a retrieval buoy on whale-safe lobster gear, then recover the pot itself.",
+    "procedure": [
+      "Locate the lobster pot (milk-crate + PVC frame) on the bottom, with its retrieval buoy tucked under a covered 3\" PVC housing, connected by a rope long enough to reach the surface.",
+      "Turn the 1/2\" PVC handle to simulate the acoustic release. Success is defined purely as the buoy no longer touching the 3\" pipe = 10 pts.",
+      "Lift the entire pot off the bottom under ROV control (5 pts), then carry it to the surface and remove it from the water onto the pool deck (5 pts).",
+      "You may still recover the pot for those 10 pts even if you never trigger the release \u2014 but once the pot is out of the water, you can no longer go back for release points.",
+      "Do not drag the pot along the bottom by pulling the rope or buoy \u2014 it must be lifted clear of the bottom under ROV control."
+    ],
+    "scoring_notes": [
+      "The lobster pot weighs less than 20 Newtons in water."
     ],
     "required_images": [
       "pre_release",
@@ -94,10 +175,21 @@
   },
   {
     "id": "2.5",
-    "title": "Recovery line to buoy anchor",
-    "instructions": [
-      "Attach a recovery line to the buoy anchor",
-      "Return the line to the surface at the designated pool side"
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 15 pts",
+    "title": "Recover the buoy anchor",
+    "overview": "Attach your own recovery line and mechanism to a buoy anchor's U-bolt and bring the line back to the surface.",
+    "procedure": [
+      "The anchor is a 2-gallon bucket with a lid and a #310 U-bolt in the center. You must bring your OWN recovery line and attachment mechanism (e.g., a carabiner) \u2014 MATE does not provide one.",
+      "Before connecting, your line must be FULLY contained within your attachment mechanism or aboard the ROV \u2014 no loose line/rope in the pool prior to attaching. If it's loose beforehand, you lose credit; recoil it and retry.",
+      "Make a secure, full 360\u00b0 wrap connection around the U-bolt that won't come loose. Success = the mechanism no longer touching the ROV and secured to the U-bolt = 10 pts.",
+      "Ascend to the surface, spooling the line out of your attachment mechanism as you go (not before you connect).",
+      "Return to the surface with a team member holding the line poolside, while the other end stays connected to the U-bolt = 5 pts.",
+      "The mechanism must stay connected to the U-bolt for the rest of the run \u2014 if it comes off, you lose both points but may re-attach to regain them."
+    ],
+    "scoring_notes": [
+      "A 'secure connection' specifically means full 360\u00b0 encompassing of the U-bolt, not a partial hook."
     ],
     "required_images": [
       "attachment_point",
@@ -106,10 +198,20 @@
   },
   {
     "id": "2.6",
-    "title": "Replace eDNA sensor on Holyrood observatory",
-    "instructions": [
-      "Remove the existing eDNA sensor",
-      "Install the new sensor and connect it to the Holyrood subsea observatory"
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 25 pts",
+    "title": "Replace the eDNA sensor on the Holyrood observatory",
+    "overview": "Swap out an old eDNA sensor for a new one at the Holyrood subsea observatory's designated mounting area.",
+    "procedure": [
+      "Locate the old eDNA sensor (1/2\" + 2\" PVC, under 10N in water, with a 50 cm rope handle) inside a 50 cm yellow-painted PVC square \u2014 the designated area \u2014 on the bottom.",
+      "Lift it fully out of the water onto the pool deck = 5 pts. This must happen BEFORE installing the new sensor; the judge then hands you the frequency data table (used in Task 2.7).",
+      "Retrieve the new eDNA sensor from the surface/poolside (also has a 50 cm rope carrying handle, plus a cable-connected 1/2\" PVC connector).",
+      "Place the new sensor fully inside the designated yellow square, upright, and no longer touching the ROV = 10 pts. It must stay upright and inside the area for the rest of the run (retry allowed if it tips or drifts out).",
+      "Plug the sensor's connector into the two openings of the 1 1/2\" PVC connection port on the Holyrood observatory frame = 10 pts. It must stay connected for the rest of the run (retry allowed if it disconnects)."
+    ],
+    "scoring_notes": [
+      "The old sensor must be recovered before the new sensor can be installed \u2014 order matters."
     ],
     "required_images": [
       "sensor_before",
@@ -119,10 +221,22 @@
   },
   {
     "id": "2.7",
-    "title": "Observatory — data frequency and camera biofouling",
-    "instructions": [
-      "Analyze observatory data to determine organism sighting frequency",
-      "Remove biofouling from the observatory camera"
+    "group": "Task 2: SmartAtlantic Alliance \u2014 Better Information, Better Decisions",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 20 pts",
+    "title": "Observatory data analysis and camera biofouling removal",
+    "overview": "Convert raw species sighting counts into percentage frequencies, then clear biofouling off the observatory's simulated camera.",
+    "procedure": [
+      "After recovering the old sensor (Task 2.6), the judge gives you a table of 10 species with raw 'number seen' counts.",
+      "Sum all 10 counts, then for EACH species divide its count by the total and multiply by 100 to get its percent frequency.",
+      "Show all 10 calculated percentages to the judge = 10 pts, scored across all 10 species together.",
+      "Separately, the observatory camera is simulated by two overlapping corrugated-plastic sheets: an outer sheet with a 5x5 cm cutout window, and an inner rotating sheet colored orange and blue behind it.",
+      "The judge tells you which color (orange or blue) must appear in the window.",
+      "Using the ROV, rotate the inner sheet (via a PVC tee) continuously in ONE direction \u2014 clockwise or counterclockwise, but do not switch \u2014 until the target color passes fully through the window for the 3rd time.",
+      "Let the judge visually confirm all three passes of the correct color through the window = 10 pts once confirmed."
+    ],
+    "scoring_notes": [
+      "Example: Snow crab seen 19 times out of 84 total sightings = 22.62% frequency."
     ],
     "required_images": [
       "data_plot_or_notes",
@@ -132,10 +246,23 @@
   },
   {
     "id": "3.1",
-    "title": "Bubble curtain and micropile installation",
-    "instructions": [
-      "Place a bubble curtain around the designated installation area",
-      "Install a micropile per mission specification"
+    "group": "Task 3: Wind-Powered Offshore Oil Platform \u2014 Scalable Solutions for Global Energy Needs",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 30 pts (penalties may apply)",
+    "title": "Bubble curtain placement and micropile installation",
+    "overview": "Place a noise-dampening bubble curtain around a designated seafloor location, then coordinate with poolside teammates to install a wind-turbine micropile anchor there.",
+    "procedure": [
+      "Retrieve the bubble curtain device (1/2\" PEX tubing + rope) from the surface/poolside.",
+      "Place it around the orange-painted PVC base marking the designated micropile location. Success = curtain no longer touching the ROV and fully surrounding the orange pipe = 10 pts. This must happen BEFORE the micropile is installed \u2014 no credit after.",
+      "The micropile itself (1\" PVC + rope + pin) is lowered BY HAND from the surface through a 3.1 m guide pipe. Your ROV may NOT touch, carry, or push the micropile before it's installed.",
+      "Use your ROV's camera view to verbally guide poolside teammates into position (e.g., 'move it 20 cm right, then lower 50 cm').",
+      "Success = micropile fully inside the 2\" designated-location pipe = 10 pts.",
+      "PENALTY: touching the micropile with the ROV before installation costs 5 pts each time, up to 2 times (10 pts max penalty) \u2014 keep the ROV clear until it's seated.",
+      "Once installed, you may touch the micropile to pull the retaining pin \u2014 through two small drilled holes and a rope loop \u2014 fully out of the water. Success = pin no longer in the pipe holes and the rope removed from the water = 10 pts. (The pin becomes debris afterward.)",
+      "The micropile must stay installed for the rest of the run. If it comes loose and the rope is still attached, you can reinstall to regain the 10 pts; if the rope detaches entirely, that portion can't be recovered."
+    ],
+    "scoring_notes": [
+      "Strict BEFORE/AFTER ordering: curtain before micropile, no ROV contact with the micropile until it's seated."
     ],
     "required_images": [
       "curtain_layout",
@@ -144,10 +271,19 @@
   },
   {
     "id": "3.2",
-    "title": "Retrieve power connector and lay cable",
-    "instructions": [
-      "Retrieve the power connector from the wind farm subsea station",
-      "Lay the cable through the specified waypoint"
+    "group": "Task 3: Wind-Powered Offshore Oil Platform \u2014 Scalable Solutions for Global Energy Needs",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 15 pts",
+    "title": "Retrieve the power connector and lay the cable",
+    "overview": "Grab the offshore wind farm's power connector and route its cable through a marked waypoint near the micropile.",
+    "procedure": [
+      "Locate the wind farm subsea platform/connector (1/2\" PVC + screw-hook handle, with 4 m of cable running to the platform).",
+      "Lift the connector fully under ROV control = 5 pts. (If it's dropped later, you keep this point but need the connector back to finish the remaining steps.)",
+      "Route the connector's cable ON THE BOTTOM, threading it between the two vertical PVC posts of the waypoint marker (~40 cm from the micropile) = 10 pts.",
+      "The cable must stay inside the waypoint posts for the rest of the run \u2014 if it comes out, you lose the points but can re-lay it to regain them."
+    ],
+    "scoring_notes": [
+      "The oil platform and wind farm have no surface components \u2014 everything is subsurface, no ropes or lines connect them to shore."
     ],
     "required_images": [
       "connector_retrieved",
@@ -157,10 +293,19 @@
   },
   {
     "id": "3.3",
-    "title": "Install power connector on oil platform port",
-    "instructions": [
-      "Remove the cover from the oil platform port",
-      "Install the power connector securely"
+    "group": "Task 3: Wind-Powered Offshore Oil Platform \u2014 Scalable Solutions for Global Energy Needs",
+    "venue": "Offshore Engineering Basin Tank (World Championship)",
+    "points": "Up to 15 pts",
+    "title": "Install the power connector on the oil platform port",
+    "overview": "Prep the oil platform's power port by removing its cover, then plug in the wind-farm connector retrieved in Task 3.2.",
+    "procedure": [
+      "Locate the oil platform's power port (1 1/2\" PVC), covered by a 3\" PVC end-cap with a rope handle.",
+      "Remove the cover \u2014 order relative to grabbing the connector doesn't matter. Success = cover under ROV control and no longer touching the port = 5 pts. (The cover becomes debris \u2014 bring it up or keep it on the ROV by the end of the run.)",
+      "Once you have BOTH the connector (from Task 3.2) and an uncovered port, insert the connector's Velcro-hook end into the port's Velcro-loop interior, making a firm Velcro-to-Velcro stick = 10 pts.",
+      "Success = connector fully inserted, no longer touching the ROV, with a solid Velcro stick. It must stay connected for the rest of the run \u2014 reinstall to regain points if it pops out."
+    ],
+    "scoring_notes": [
+      "This task depends on completing both halves of Task 3.2 first (retrieved connector + uncovered port)."
     ],
     "required_images": [
       "port_cover_removed",
@@ -170,10 +315,20 @@
   },
   {
     "id": "4.1",
-    "title": "Profiling float — pre-mission build (documentation)",
-    "instructions": [
-      "Prior to competition, design and construct an operational profiling float",
-      "Bring documentation photos for inspection / mission control records"
+    "group": "Task 4: MATE Floats Under the Ice",
+    "venue": "Ice Tank (built and documented before competition)",
+    "points": "5 pts",
+    "title": "Design and build an operational profiling float",
+    "overview": "Design and build your own vertical profiling float with a genuine buoyancy engine before competition, and submit its safety documentation in advance.",
+    "procedure": [
+      "Build a float no more than 1 m tall/long overall, and no more than 18 cm in any diameter/width \u2014 with NO surface tether, airline, or rope to shore or bottom.",
+      "It must move vertically using a real buoyancy engine (pumping air/fluid to change the float's density). Thrusters or propellers pushing the float around do NOT count as a buoyancy engine.",
+      "Route all float power through a single fuse (per non-ROV device power rules); small button cells for timing circuits are exempt from the main battery rules.",
+      "Include a required recovery feature: a loop, U-bolt, or similar graspable point at least 5 cm wide, protruding at least 5 cm from the float body (this can exceed the 18 cm diameter limit) so a recovery ROV can grab and retrieve it.",
+      "Submit your non-ROV device documentation (per DOC-004: buoyancy engine description, battery/fuse specs, communication method) in advance of the competition \u2014 5 pts awarded for valid, submitted documentation plus bringing the float to the station."
+    ],
+    "scoring_notes": [
+      "Regional competitions may waive the advance-documentation requirement \u2014 confirm with your regional coordinator."
     ],
     "required_images": [
       "float_overview",
@@ -183,10 +338,19 @@
   },
   {
     "id": "4.2",
-    "title": "Float — handshake before descent",
-    "instructions": [
-      "Float communicates with the mission station prior to descending",
-      "Confirm mission station receives expected status or telemetry"
+    "group": "Task 4: MATE Floats Under the Ice",
+    "venue": "Ice Tank (World Championship)",
+    "points": "5 pts",
+    "title": "Float handshake before descent",
+    "overview": "Prove the float can transmit its required data packet to your shore-station receiver immediately after deployment, before it starts descending.",
+    "procedure": [
+      "Hand-launch the float through the 1 m x 1 m ice-sheet cutout (or at the surface for regional competitions). Deployment = float no longer touching any team member and floating freely.",
+      "Before the float begins its first descent, it must wirelessly transmit at least ONE complete 'defined data packet' to your own receiver: company number, a timestamp (UTC, local, or float time), and pressure or depth data (in kPa/Pa or m/cm).",
+      "Show the judge that single packet appearing on your receiver's screen = 5 pts. (Sending more than one packet is fine, no penalty.)",
+      "If it fails to transmit before descending, you may recover the float and attempt repairs \u2014 but if it already started descending before transmitting, you lose this point for the run."
+    ],
+    "scoring_notes": [
+      "Example valid packet format: 'EX01  1:51:42 UTC  9.8 kpa  1.00 meters'."
     ],
     "required_images": [
       "mission_station_display",
@@ -195,10 +359,18 @@
   },
   {
     "id": "4.3",
-    "title": "Float — two vertical profiles under ice",
-    "instructions": [
-      "Complete two vertical profiles under the simulated ice",
-      "Follow depth and timing constraints in the manual"
+    "group": "Task 4: MATE Floats Under the Ice",
+    "venue": "Ice Tank (World Championship)",
+    "points": "Up to 20 pts",
+    "title": "Complete two vertical profiles under the ice",
+    "overview": "Have the float complete two full descend-then-ascend cycles beneath the ice using only its buoyancy engine.",
+    "procedure": [
+      "A 'vertical profile' = starting at the surface, descending to ~2.5 m depth, then ascending back up to ~40 cm depth, using the buoyancy engine (not thrusters).",
+      "Even a sloppy profile (e.g., sinking to the pool floor then floating fully back to the surface) still counts as 'completed' for the base 10 pts \u2014 but you'll miss the separate depth-holding and no-surface-breach bonuses (see Task 4.4).",
+      "Run this cycle twice total. Each completed cycle is worth 10 pts on its own (20 pts total for both), independent of whether depth-holding worked perfectly."
+    ],
+    "scoring_notes": [
+      "This subtask only scores whether a profile happened \u2014 precision scoring lives in Task 4.4."
     ],
     "required_images": [
       "profile_1_trace",
@@ -207,10 +379,21 @@
   },
   {
     "id": "4.4",
-    "title": "Float — hold depth at 2.5 m and 40 cm",
-    "instructions": [
-      "At prescribed stages, maintain depth at 2.5 meters",
-      "Maintain depth at 40 cm as specified for the mission scenario"
+    "group": "Task 4: MATE Floats Under the Ice",
+    "venue": "Ice Tank (World Championship)",
+    "points": "Up to 20 pts (penalties may apply)",
+    "title": "Hold depth at 2.5 m and 40 cm",
+    "overview": "During each of the two profiles, hold the float steady at ~2.5 m and again at ~40 cm for a full 30 seconds each, without breaking the surface or touching the ice.",
+    "procedure": [
+      "At 2.5 m depth (\u00b133 cm tolerance, measured from the float's BOTTOM \u2014 offset for sensor position if needed and tell the judge your adjusted range beforehand), hold steady for a full, continuous 30 seconds = 5 pts per profile (10 pts total across both).",
+      "If the float drifts outside the \u00b133 cm band at any point during the 30s, the clock resets \u2014 you need a fresh, uninterrupted 30 seconds once back in range.",
+      "Then ascend to 40 cm depth (\u00b133 cm, measured from the float's TOP) and hold there for another full 30 seconds = 5 pts per profile (10 pts total across both).",
+      "PENALTY: if at any point the float breaks the surface or touches the ice sheet during a profile, that entire profile takes a 5-point penalty.",
+      "After recovery, your transmitted data packets must show 7 sequential packets (spaced ~5s apart, spanning the full 30s) within the proper depth range for each hold \u2014 have this ready to show the judge.",
+      "Optional: rig visual cues (e.g., different colored LEDs for 'in the 2.5 m band' vs. 'in the 40 cm band') so your surface team can visually judge when it's safe to recover \u2014 doesn't affect scoring but helps timing decisions."
+    ],
+    "scoring_notes": [
+      "You may attempt extra profiles beyond the required two if you suspect a penalty occurred, and use whichever profile of the same type scores higher \u2014 but you cannot mix-and-match individual pieces across different profile attempts."
     ],
     "required_images": [
       "hold_2_5m_evidence",
@@ -219,10 +402,20 @@
   },
   {
     "id": "4.5",
-    "title": "Float — post-recovery data upload",
-    "instructions": [
-      "After recovery, float communicates stored profile data to mission station",
-      "Verify data integrity at the station"
+    "group": "Task 4: MATE Floats Under the Ice",
+    "venue": "Ice Tank (World Championship)",
+    "points": "Up to 10 pts",
+    "title": "Post-recovery data communication",
+    "overview": "After the float is physically recovered, transmit its full stored dataset from both profiles to your shore receiver.",
+    "procedure": [
+      "Signal the judge when ready for recovery. At the World Championship, a MATE-piloted ROV retrieves your float and your competition clock pauses during this; at regional competitions, your own ROV should perform the recovery.",
+      "Once the float is in a team member's hands on the pool deck, transmit ALL stored data packets from both profiles to your receiver.",
+      "Showing the judge one packet from every 5 seconds of BOTH profiles = full credit = 10 pts.",
+      "If you can only show at least ONE packet from after the float began profiling (not a pre-descent packet), that's partial credit = 5 pts.",
+      "If your float can't communicate at least 20 total data packets, you may request MATE-provided reference data instead \u2014 doing so forfeits your own communication credit for graphing purposes (see Task 4.6)."
+    ],
+    "scoring_notes": [
+      "The float must be recovered before any post-recovery communication points can be earned."
     ],
     "required_images": [
       "recovery_photo",
@@ -231,10 +424,19 @@
   },
   {
     "id": "4.6",
-    "title": "Float — depth vs. time graph",
-    "instructions": [
-      "Graph recorded data as depth over time",
-      "Submit or display per scoring / operator requirements"
+    "group": "Task 4: MATE Floats Under the Ice",
+    "venue": "Ice Tank / adjacent data station (World Championship)",
+    "points": "10 pts",
+    "title": "Graph depth over time",
+    "overview": "Turn your float's transmitted data (or MATE-provided reference data) into a depth-vs-time graph for the judge.",
+    "procedure": [
+      "Using a computer or device (not hand-drawn), plot depth on the Y-axis against time on the X-axis, using data from your float's transmissions.",
+      "Include at least 20 data packets on the graph, covering both vertical profiles.",
+      "If your float didn't transmit 20+ usable packets, request MATE's reference dataset instead and graph that \u2014 note that choosing this route forfeits the 'communicate all data packets' credit from Task 4.5.",
+      "Show the finished graph to the judge for 10 pts, scored all-or-nothing on having a complete, correctly-structured graph."
+    ],
+    "scoring_notes": [
+      "Graphing must happen within the 15-minute demonstration window; if graphing occurs at a separate data station, time only resumes once your team physically arrives there."
     ],
     "required_images": [
       "depth_time_graph",
