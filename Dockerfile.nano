@@ -1,0 +1,43 @@
+# ROS 2 Humble for the Jetson, for hosts that cannot run Humble natively.
+#
+# Humble is packaged only for Ubuntu 22.04. A Nano flashed with a JetPack based
+# on 24.04 (noble) has no Humble packages available, so the stack runs in this
+# container instead until the host can be reflashed to match.
+#
+# ros-base, not desktop-full: the Nano never runs rviz or gazebo, and
+# desktop-full is several times the download for tools that would sit unused.
+#
+# Build and run with scripts/docker_nano.sh - it handles device passthrough.
+FROM ros:humble-ros-base
+
+SHELL ["/bin/bash", "-c"]
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Everything the materov nodes import, beyond what ros-base already ships:
+#   smbus        -> imu_sensor_node, pressure_sensor_node  (I2C)
+#   serial       -> signal_publisher_node                  (thruster MCU)
+#   cv_bridge    -> camera_node, jetson_node               (not in ros-base)
+#   cyclonedds   -> ros/config/jetson/cyclonedds.xml
+#   i2c-tools    -> i2cdetect, for debugging sensors inside the container
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3-colcon-common-extensions \
+      python3-pip \
+      git \
+      nano \
+      i2c-tools \
+      python3-smbus \
+      python3-serial \
+      python3-numpy \
+      python3-opencv \
+      ros-humble-cv-bridge \
+      ros-humble-rmw-cyclonedds-cpp \
+      ros-humble-v4l2-camera \
+    && rm -rf /var/lib/apt/lists/*
+
+# The repo is bind-mounted here by scripts/docker_nano.sh.
+WORKDIR /workspace
+
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc \
+ && echo '[ -f /workspace/ros/install/setup.bash ] && source /workspace/ros/install/setup.bash' >> /root/.bashrc
+
+CMD ["bash"]
