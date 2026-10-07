@@ -8,7 +8,7 @@ from the *2027 MATE Floats Preview Mission* (Explorer), published at
 
 ```bash
 /opt/homebrew/bin/python3.12 -m venv float_station/.venv
-float_station/.venv/bin/pip install "customtkinter>=5.2" "matplotlib>=3.8" "pyserial>=3.5"
+float_station/.venv/bin/pip install -r float_station/requirements.txt
 cd float_station && .venv/bin/python app.py
 ```
 
