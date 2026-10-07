@@ -11,8 +11,8 @@ with no training. See [`sift_counter.py`](sift_counter.py).
 ## Setup
 
 ```bash
-/opt/homebrew/bin/python3.12 -m venv vision/.venv    # any Python 3.10+
-vision/.venv/bin/pip install "opencv-python-headless>=4.8" "numpy>=1.24"
+python3 -m venv vision/.venv                          # Python 3.10+
+vision/.venv/bin/pip install -r vision/crab_counter/requirements.txt
 ```
 
 Download MATE's files into `dataset/mate_2026/` (git ignores `dataset/`).
