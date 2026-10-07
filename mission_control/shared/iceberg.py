@@ -103,6 +103,18 @@ def parse_coordinate(text: str, axis: str) -> float:
     return -value if negative or (letters and letters[0] in 'SW') else value
 
 
+def parse_number(text: str, label: str) -> float:
+    """One plain number with an optional unit: '135', '135°T', '93.5 m'.
+
+    Anything else ('1 00', '1e2', '1_000', 'nan', two numbers) is an error,
+    not a guess: a typo from the judge's sheet must never become a value.
+    """
+    match = re.fullmatch(r'([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:°\s*T?|T|M)?', text.strip().upper())
+    if not match:
+        raise ValueError(f'{label}: enter one number, like 135 or 93.5 (got {text!r})')
+    return float(match.group(1))
+
+
 def format_coordinate(value: float, axis: str) -> str:
     """46.755, 'lat' -> "46°45.30′N" (degrees and decimal minutes)."""
     hemisphere = ('N' if value >= 0 else 'S') if axis == 'lat' else ('E' if value >= 0 else 'W')

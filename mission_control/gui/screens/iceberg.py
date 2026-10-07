@@ -8,7 +8,6 @@ does not lose what was typed.
 from __future__ import annotations
 
 import math
-import re
 import tkinter as tk
 from typing import Callable, Dict, List
 
@@ -19,28 +18,26 @@ from shared import iceberg as ice
 PLATFORM_NAMES = ('Hibernia', 'Sea Rose', 'Terra Nova', 'Hebron')
 PLATFORM_FIELDS = ('lat', 'lon', 'depth')
 
-# Practice only: approximate real-world positions and a scenario that
-# exercises every rule. In the pool, type the judge's sheet instead.
-PRACTICE = {
-    'ice_lat': '47 00.0 N', 'ice_lon': '49 02.0 W', 'ice_heading': '135', 'ice_keel': '100',
+# Practice only: approximate real-world platform positions. Scenario 1 hits
+# every surface rule; scenario 2 adds the subsea rules scenario 1 cannot
+# (never within 25 nm, keel below 70%). In the pool, type the judge's sheet.
+_PRACTICE_PLATFORMS = {
     'Hibernia_lat': '46 45.0 N', 'Hibernia_lon': '48 47.0 W', 'Hibernia_depth': '80',
     'Sea Rose_lat': '46 47.4 N', 'Sea Rose_lon': '48 01.0 W', 'Sea Rose_depth': '120',
     'Terra Nova_lat': '46 28.5 N', 'Terra Nova_lon': '48 28.8 W', 'Terra Nova_depth': '95',
     'Hebron_lat': '46 32.7 N', 'Hebron_lon': '48 29.9 W', 'Hebron_depth': '93',
 }
+PRACTICE_SCENARIOS = [
+    {'ice_lat': '47 00.0 N', 'ice_lon': '49 02.0 W', 'ice_heading': '135', 'ice_keel': '100',
+     **_PRACTICE_PLATFORMS},
+    {'ice_lat': '47 00.0 N', 'ice_lon': '47 42.0 W', 'ice_heading': '215', 'ice_keel': '60',
+     **_PRACTICE_PLATFORMS},
+]
 
 THREAT_COLOURS = {ice.GREEN: '#1e8449', ice.YELLOW: '#b7950b', ice.RED: '#c0392b'}
 WARN_COLOUR = ('#b9770e', '#f5b041')
 ERROR_COLOUR = ('#c0392b', '#e74c3c')
 MAP_BG, MAP_INK, MAP_DIM = '#0e2a3d', '#ecf0f1', '#7f8c8d'
-
-
-def _number(text: str, label: str) -> float:
-    cleaned = re.sub(r'[\s°]|[mMtT]$', '', text.strip())
-    try:
-        return float(cleaned)
-    except ValueError:
-        raise ValueError(f'{label}: enter a number (got {text!r})') from None
 
 
 class IcebergScreen(ctk.CTkScrollableFrame):
@@ -91,7 +88,8 @@ class IcebergScreen(ctk.CTkScrollableFrame):
         buttons.pack(fill='x', padx=12, pady=(6, 0))
         ctk.CTkButton(buttons, text='Compute (Enter)', width=140, command=self.compute).pack(side='left')
         practice = ctk.CTkButton(buttons, text='Load practice data', width=150, fg_color='gray30')
-        practice.configure(command=lambda: self._two_step(practice, 'Load practice data', self._load_practice))
+        practice.configure(command=lambda: self._two_step(practice, 'Load practice data',
+                                                          self._load_practice, self._form_is_practice))
         practice.pack(side='left', padx=8)
         clear = ctk.CTkButton(buttons, text='Clear', width=80, fg_color='gray30')
         clear.configure(command=lambda: self._two_step(clear, 'Clear', self._clear))
@@ -153,9 +151,11 @@ class IcebergScreen(ctk.CTkScrollableFrame):
                       if focused in (e, getattr(e, '_entry', None))), -1)
         self._entries[(index + delta) % len(self._entries)].focus_set()
 
-    def _two_step(self, button: ctk.CTkButton, text: str, action: Callable[[], None]) -> None:
+    def _two_step(self, button: ctk.CTkButton, text: str, action: Callable[[], None],
+                  harmless: Callable[[], bool] = lambda: False) -> None:
         """Overwriting typed data takes a second click within 3 s."""
-        if not getattr(button, '_armed', False) and any(v.get().strip() for v in self._vars.values()):
+        typed = any(v.get().strip() for v in self._vars.values())
+        if not getattr(button, '_armed', False) and typed and not harmless():
             button._armed = True
             button.configure(text=f'{text}? Click again')
             self._later(3000, lambda: self._disarm(button, text))
@@ -168,12 +168,19 @@ class IcebergScreen(ctk.CTkScrollableFrame):
         button._armed = False
         button.configure(text=text)
 
+    def _form_is_practice(self) -> bool:
+        form = {key: var.get() for key, var in self._vars.items()}
+        return form in PRACTICE_SCENARIOS
+
     def _load_practice(self) -> None:
-        for key, value in PRACTICE.items():
+        """Each click loads the next practice scenario."""
+        index = int(self._store.get('_practice_next', '0')) % len(PRACTICE_SCENARIOS)
+        self._store['_practice_next'] = str(index + 1)
+        for key, value in PRACTICE_SCENARIOS[index].items():
             self._vars[key].set(value)
         self.compute()
-        self._message.configure(text='PRACTICE DATA (approximate real positions). '
-                                     "Use the judge's sheet in competition.\n"
+        self._message.configure(text=f'PRACTICE DATA, scenario {index + 1} of {len(PRACTICE_SCENARIOS)} '
+                                     "(approximate real positions). Use the judge's sheet in competition.\n"
                                      + self._message.cget('text'))
 
     def _clear(self) -> None:
@@ -189,12 +196,12 @@ class IcebergScreen(ctk.CTkScrollableFrame):
         try:
             iceberg = ice.Iceberg(ice.parse_coordinate(value('ice_lat'), 'lat'),
                                   ice.parse_coordinate(value('ice_lon'), 'lon'),
-                                  _number(value('ice_heading'), 'Heading'),
-                                  _number(value('ice_keel'), 'Keel depth'))
+                                  ice.parse_number(value('ice_heading'), 'Heading'),
+                                  ice.parse_number(value('ice_keel'), 'Keel depth'))
             platforms = [ice.Platform(name,
                                       ice.parse_coordinate(value(f'{name}_lat'), 'lat'),
                                       ice.parse_coordinate(value(f'{name}_lon'), 'lon'),
-                                      _number(value(f'{name}_depth'), f'{name} water depth'))
+                                      ice.parse_number(value(f'{name}_depth'), f'{name} water depth'))
                          for name in PLATFORM_NAMES]
             results = ice.assess(iceberg, platforms)
         except ValueError as exc:
