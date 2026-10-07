@@ -7,7 +7,7 @@ from the *2027 MATE Floats Preview Mission* (Explorer), published at
 <https://materovcompetition.org/2026>.
 
 ```bash
-/opt/homebrew/bin/python3.12 -m venv float_station/.venv
+python3 -m venv float_station/.venv            # Python 3.10+
 float_station/.venv/bin/pip install -r float_station/requirements.txt
 cd float_station && .venv/bin/python app.py
 ```
