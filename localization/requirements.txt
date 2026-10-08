@@ -1,0 +1,3 @@
+# Localization prototypes (localization/)
+numpy>=1.24
+matplotlib>=3.8
